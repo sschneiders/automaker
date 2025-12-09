@@ -129,6 +129,14 @@ export function AgentOutputModal({
       } else if (event.type === "auto_mode_feature_complete") {
         const emoji = event.passes ? "✅" : "⚠️";
         newContent = `\n${emoji} Task completed: ${event.message}\n`;
+
+        // Close the modal when the feature is verified (passes = true)
+        if (event.passes) {
+          // Small delay to show the completion message before closing
+          setTimeout(() => {
+            onClose();
+          }, 1500);
+        }
       }
 
       if (newContent) {
@@ -156,7 +164,7 @@ export function AgentOutputModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col" data-testid="agent-output-modal">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />

@@ -34,7 +34,7 @@
       "3. wait until it is moved to verified",
       "4. assert modal is hidden"
     ],
-    "status": "in_progress"
+    "status": "verified"
   },
   {
     "id": "feature-1765254432072-bqk25kivv",
@@ -42,5 +42,12 @@
     "description": "Add a concurrency slider left of automode so I can specify how many max agents should be running at one time.  if we are at max, do not pull over more tasks from the backlog",
     "steps": [],
     "status": "verified"
+  },
+  {
+    "id": "feature-1765259922422-d61lu00sq",
+    "category": "Core",
+    "description": "add a context feature / route which allows users to upload files or images or text which will persist to .automaker/context. there should be a left panel with all context files and a text editor or image previewer that lets users view edit delete the context.  include the context in every single coding prompt or improve the coding_prompt.md to have a phase where it loads in that context",
+    "steps": [],
+    "status": "in_progress"
   }
 ]

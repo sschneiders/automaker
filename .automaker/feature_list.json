@@ -143,19 +143,6 @@
     "thinkingLevel": "none"
   },
   {
-    "id": "feature-1765334243840-qmnc0ez5o",
-    "category": "Core",
-    "description": "So we added support for codex cli models but when we select them on model tab its still trying to use claude model there is some race condition in the code\n\n1] [AutoMode] Running specific feature: feature-1765334118538-zc6n2ngu8\n[1] [AutoMode] Running feature: For example i got haiku model running or codex one but we can still see opus 4.5 check if it not hardcoded and fix it to use proper model name that was used in this task\n[1] [FeatureLoader] Created backup at /Users/shirone/Documents/Projekty/automaker/.automaker/feature_list.backup.json\n[1] [FeatureLoader] Updated feature feature-1765334118538-zc6n2ngu8: status=in_progress\n[1] [FeatureLoader] Successfully saved 13 features to feature_list.json\n[1] [FeatureExecutor] Implementing: For example i got haiku model running or codex one but we can still see opus 4.5 check if it not hardcoded and fix it to use proper model name that was used in this task\n[1] [FeatureExecutor] Phase: PLANNING for For example i got haiku model running or codex one but we can still see opus 4.5 check if it not hardcoded and fix it to use proper model name that was used in this task\n[1] [FeatureExecutor] getModelString: modelKey=gpt-5.1-codex, modelString=claude-opus-4-5-20251101\n[1] [FeatureExecutor] Using provider: Codex/OpenAI, model: claude-opus-4-5-20251101, thinking: none\n[1] [FeatureExecutor] Phase: ACTION for For example i got haiku model running or codex one but we can still see opus 4.5 check if it not hardcoded and fix it to use proper model name that was used in this task\n[1] [FeatureExecutor] ERROR: Codex provider selected but Claude model string detected: claude-opus-4-5-20251101\n[1] [FeatureExecutor] Feature model: gpt-5.1-codex, modelString: claude-opus-4-5-20251101\n[1] [FeatureExecutor] Error implementing feature: Error: Invalid model configuration: Codex provider cannot use Claude model 'claude-opus-4-5-20251101'. Please check feature model setting.\n[1]     at FeatureExecutor.implementFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/services/feature-executor.js:303:17)\n[1]     at async AutoModeService.runFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/auto-mode-service.js:142:22)\n[1]     at async /Users/shirone/Documents/Projekty/automaker/app/electron/main.js:421:12\n[1]     at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)\n[1] [FeatureExecutor] Error details: {\n[1]   message: \"Invalid model configuration: Codex provider cannot use Claude model 'claude-opus-4-5-20251101'. Please check feature model setting.\",\n[1]   stack: \"Error: Invalid model configuration: Codex provider cannot use Claude model 'claude-opus-4-5-20251101'. Please check feature model setting.\\n\" +\n[1]     '    at FeatureExecutor.implementFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/services/feature-executor.js:303:17)\\n' +\n[1]     '    at async AutoModeService.runFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/auto-mode-service.js:142:22)\\n' +\n[1]     '    at async /Users/shirone/Documents/Projekty/automaker/app/electron/main.js:421:12\\n' +\n[1]     '    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)',\n[1]   name: 'Error',\n[1]   code: undefined,\n[1]   model: 'not initialized',\n[1]   provider: 'unknown',\n[1]   isCodex: 'unknown'\n[1] }\n[1] [AutoMode] Error running feature: Error: Invalid model configuration: Codex provider cannot use Claude model 'claude-opus-4-5-20251101'. Please check feature model setting.\n[1]     at FeatureExecutor.implementFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/services/feature-executor.js:303:17)\n[1]     at async AutoModeService.runFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/auto-mode-service.js:142:22)\n[1]     at async /Users/shirone/Documents/Projekty/automaker/app/electron/main.js:421:12\n[1]     at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)\n[1] [IPC] auto-mode:run-feature error: Error: Invalid model configuration: Codex provider cannot use Claude model 'claude-opus-4-5-20251101'. Please check feature model setting.\n[1]     at FeatureExecutor.implementFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/services/feature-executor.js:303:17)\n[1]     at async AutoModeService.runFeature (/Users/shirone/Documents/Projekty/automaker/app/electron/auto-mode-service.js:142:22)\n[1]     at async /Users/shirone/Documents/Projekty/automaker/app/electron/main.js:421:12\n[1]     at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)\n",
-    "steps": [],
-    "status": "waiting_approval",
-    "startedAt": "2025-12-10T02:37:26.038Z",
-    "imagePaths": [],
-    "skipTests": true,
-    "summary": "Fixed race condition in Codex model selection. Modified: feature-executor.js. The getModelString() method was incorrectly falling back to Claude opus model when Codex models were selected because it checked if modelString === modelKey (which is true for Codex). Fixed by checking isCodexModel() first and using the registry directly for Codex models. Also updated resumeFeatureWithContext() to properly use Codex provider when needed.",
-    "model": "opus",
-    "thinkingLevel": "ultrathink"
-  },
-  {
     "id": "feature-1765334441225-h3j832sbz",
     "category": "Kanban",
     "description": "For example i got haiku model running or codex one but we can still see opus 4.5 check if it not hardcoded and fix it to use proper model name that was used in this task",
@@ -207,35 +194,73 @@
     "thinkingLevel": "none"
   },
   {
-    "id": "feature-1765360665626-u2vhr80aa",
-    "category": "Uncategorized",
-    "description": "I dont want you to change any code describe what u see in attached image",
-    "steps": [],
-    "status": "backlog",
-    "startedAt": "2025-12-10T09:57:47.494Z",
-    "imagePaths": [
-      {
-        "id": "img-1765360662146-d5qi79j88",
-        "path": "/Users/shirone/Library/Application Support/automaker/images/1765360662144-2pt9bt1u4_image-test.png",
-        "filename": "image-test.png",
-        "mimeType": "image/png"
-      }
-    ],
-    "skipTests": true,
-    "model": "gpt-5.1-codex",
-    "thinkingLevel": "none"
-  },
-  {
     "id": "feature-1765360739103-3h218d1nn",
     "category": "Kanban",
     "description": "When u write new feature for ai agent and attacht context images and change tab to choose diff model and go back to prompt tab the image preview break and im not sure if it even saved properly in state to be later attached check it out for me",
     "steps": [],
-    "status": "waiting_approval",
+    "status": "verified",
     "startedAt": "2025-12-10T09:59:02.988Z",
     "imagePaths": [],
     "skipTests": true,
     "summary": "Fixed image preview breaking when switching tabs in Add Feature modal. Added previewMap/onPreviewMapChange props to DescriptionImageDropZone component to lift preview state up to parent. Modified: description-image-dropzone.tsx (added parent-controlled state support), board-view.tsx (added newFeaturePreviewMap and followUpPreviewMap state, wired up to DescriptionImageDropZone). Image paths were already stored correctly in state - only the preview thumbnails (base64) were lost on tab switch due to component unmounting.",
     "model": "opus",
     "thinkingLevel": "high"
+  },
+  {
+    "id": "feature-1765363330908-vu0hip87r",
+    "category": "Kanban",
+    "description": "Take a look at waiting aproval column in kanban board and fix the card that render in it u can see in attached images that they text is overlaping check other columns how we have them",
+    "steps": [],
+    "status": "verified",
+    "startedAt": "2025-12-10T10:46:42.494Z",
+    "imagePaths": [
+      {
+        "id": "img-1765363296205-e4cwlj2j8",
+        "path": "/Users/shirone/Library/Application Support/automaker/images/1765363296203-bud50snjv_SCR-20251210-kosr.png",
+        "filename": "SCR-20251210-kosr.png",
+        "mimeType": "image/png"
+      },
+      {
+        "id": "img-1765363296214-lloeta38x",
+        "path": "/Users/shirone/Library/Application Support/automaker/images/1765363296212-zg03hi120_SCR-20251210-kotn.png",
+        "filename": "SCR-20251210-kotn.png",
+        "mimeType": "image/png"
+      },
+      {
+        "id": "img-1765363296221-oupa9su2f",
+        "path": "/Users/shirone/Library/Application Support/automaker/images/1765363296219-7kndnuzr2_SCR-20251210-koud.png",
+        "filename": "SCR-20251210-koud.png",
+        "mimeType": "image/png"
+      }
+    ],
+    "skipTests": true,
+    "model": "sonnet",
+    "thinkingLevel": "low"
+  },
+  {
+    "id": "feature-1765365064255-wk51aoz3e",
+    "category": "Core",
+    "description": "I want to have some abbility when executing a task on project to have some type of rewing / checkpoint system so if the changes made by agent in the project dont satisfy me / break something i can click in the ui to revert them. The best way for it would be to implement github worktress so when spin up new task claude take a look at it generate new branch that fit task issue and make it as gihub worktree then we would create a a new folder in project .automaker/worktree with branch name and clone of repo so agent can freely work one something like that ",
+    "steps": [],
+    "status": "waiting_approval",
+    "startedAt": "2025-12-10T11:11:06.115Z",
+    "imagePaths": [],
+    "skipTests": true,
+    "summary": "Implemented Git Worktree Checkpoint/Revert System. Created: worktree-manager.js service. Modified: auto-mode-service.js (worktree integration, revert/merge methods), feature-loader.js (worktree tracking), main.js (IPC handlers), preload.js (API exposure), app-store.ts (Feature type), electron.d.ts (types), electron.ts (mock API), kanban-card.tsx (branch badge, revert/merge buttons), board-view.tsx (handlers). Features: isolated git branches per feature, branch badge on cards, revert changes button, merge to main button, file diff APIs.",
+    "model": "opus",
+    "thinkingLevel": "ultrathink"
+  },
+  {
+    "id": "feature-1765365411551-87ww2zw6g",
+    "category": "Kanban",
+    "description": "When a agent is workig on task or when its in waiting approval column its would be nice to have some type of git diff panel and see what files got changed as well as reusing our custom themes we have in settings for the editor view of it take a look at codebase and create implementation for it",
+    "steps": [],
+    "status": "waiting_approval",
+    "startedAt": "2025-12-10T11:16:54.069Z",
+    "imagePaths": [],
+    "skipTests": true,
+    "summary": "Added git diff panel for in-progress and waiting approval features. Created GitDiffPanel component with themed syntax highlighting. Modified: git-diff-panel.tsx (new), agent-output-modal.tsx, worktree-manager.js, auto-mode-service.js, main.js, preload.js, electron.d.ts. The panel shows changed files with +/- stats and expandable unified diff view using CSS theme variables.",
+    "model": "opus",
+    "thinkingLevel": "ultrathink"
   }
 ]

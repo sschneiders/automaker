@@ -42,7 +42,7 @@ export interface StatResult {
 }
 
 // Auto Mode types - Import from electron.d.ts to avoid duplication
-import type { AutoModeEvent, ModelDefinition, ProviderStatus } from "@/types/electron";
+import type { AutoModeEvent, ModelDefinition, ProviderStatus, WorktreeAPI, WorktreeInfo, WorktreeStatus, FileDiffsResult, FileDiffResult, FileStatus } from "@/types/electron";
 
 export interface AutoModeAPI {
   start: (projectPath: string, maxConcurrency?: number) => Promise<{ success: boolean; error?: string }>;
@@ -128,6 +128,7 @@ export interface ElectronAPI {
     message?: string;
     error?: string;
   }>;
+  worktree?: WorktreeAPI;
 }
 
 declare global {
@@ -422,8 +423,77 @@ export const getElectronAPI = (): ElectronAPI => {
 
     // Mock Auto Mode API
     autoMode: createMockAutoModeAPI(),
+
+    // Mock Worktree API
+    worktree: createMockWorktreeAPI(),
   };
 };
+
+// Mock Worktree API implementation
+function createMockWorktreeAPI(): WorktreeAPI {
+  return {
+    revertFeature: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Reverting feature:", { projectPath, featureId });
+      return { success: true, removedPath: `/mock/worktree/${featureId}` };
+    },
+
+    mergeFeature: async (projectPath: string, featureId: string, options?: object) => {
+      console.log("[Mock] Merging feature:", { projectPath, featureId, options });
+      return { success: true, mergedBranch: `feature/${featureId}` };
+    },
+
+    getInfo: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Getting worktree info:", { projectPath, featureId });
+      return {
+        success: true,
+        worktreePath: `/mock/worktrees/${featureId}`,
+        branchName: `feature/${featureId}`,
+        head: "abc1234",
+      };
+    },
+
+    getStatus: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Getting worktree status:", { projectPath, featureId });
+      return {
+        success: true,
+        modifiedFiles: 3,
+        files: ["src/feature.ts", "tests/feature.spec.ts", "README.md"],
+        diffStat: " 3 files changed, 50 insertions(+), 10 deletions(-)",
+        recentCommits: [
+          "abc1234 feat: implement feature",
+          "def5678 test: add tests for feature",
+        ],
+      };
+    },
+
+    list: async (projectPath: string) => {
+      console.log("[Mock] Listing worktrees:", { projectPath });
+      return { success: true, worktrees: [] };
+    },
+
+    getDiffs: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Getting file diffs:", { projectPath, featureId });
+      return {
+        success: true,
+        diff: "diff --git a/src/feature.ts b/src/feature.ts\n+++ new file\n@@ -0,0 +1,10 @@\n+export function feature() {\n+  return 'hello';\n+}",
+        files: [
+          { status: "A", path: "src/feature.ts", statusText: "Added" },
+          { status: "M", path: "README.md", statusText: "Modified" },
+        ],
+        hasChanges: true,
+      };
+    },
+
+    getFileDiff: async (projectPath: string, featureId: string, filePath: string) => {
+      console.log("[Mock] Getting file diff:", { projectPath, featureId, filePath });
+      return {
+        success: true,
+        diff: `diff --git a/${filePath} b/${filePath}\n+++ new file\n@@ -0,0 +1,5 @@\n+// New content`,
+        filePath,
+      };
+    },
+  };
+}
 
 // Mock Auto Mode state and implementation
 let mockAutoModeRunning = false;

@@ -158,6 +158,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // OpenAI API
   testOpenAIConnection: (apiKey) =>
     ipcRenderer.invoke("openai:test-connection", { apiKey }),
+
+  // Worktree Management APIs
+  worktree: {
+    // Revert feature changes by removing the worktree
+    revertFeature: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:revert-feature", { projectPath, featureId }),
+
+    // Merge feature worktree changes back to main branch
+    mergeFeature: (projectPath, featureId, options) =>
+      ipcRenderer.invoke("worktree:merge-feature", { projectPath, featureId, options }),
+
+    // Get worktree info for a feature
+    getInfo: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:get-info", { projectPath, featureId }),
+
+    // Get worktree status (changed files, commits)
+    getStatus: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:get-status", { projectPath, featureId }),
+
+    // List all feature worktrees
+    list: (projectPath) =>
+      ipcRenderer.invoke("worktree:list", { projectPath }),
+
+    // Get file diffs for a feature worktree
+    getDiffs: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:get-diffs", { projectPath, featureId }),
+
+    // Get diff for a specific file in a worktree
+    getFileDiff: (projectPath, featureId, filePath) =>
+      ipcRenderer.invoke("worktree:get-file-diff", { projectPath, featureId, filePath }),
+  },
 });
 
 // Also expose a flag to detect if we're in Electron

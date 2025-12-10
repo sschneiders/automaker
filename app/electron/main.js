@@ -803,3 +803,134 @@ ipcMain.handle("openai:test-connection", async (_, { apiKey }) => {
     return { success: false, error: error.message };
   }
 });
+
+// ============================================================================
+// Worktree Management IPC Handlers
+// ============================================================================
+
+/**
+ * Revert feature changes by removing the worktree
+ * This effectively discards all changes made by the agent
+ */
+ipcMain.handle(
+  "worktree:revert-feature",
+  async (_, { projectPath, featureId }) => {
+    console.log("[IPC] worktree:revert-feature called with:", {
+      projectPath,
+      featureId,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
+
+      return await autoModeService.revertFeature({
+        projectPath,
+        featureId,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] worktree:revert-feature error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * Merge feature worktree changes back to main branch
+ */
+ipcMain.handle(
+  "worktree:merge-feature",
+  async (_, { projectPath, featureId, options }) => {
+    console.log("[IPC] worktree:merge-feature called with:", {
+      projectPath,
+      featureId,
+      options,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
+
+      return await autoModeService.mergeFeature({
+        projectPath,
+        featureId,
+        options,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] worktree:merge-feature error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * Get worktree info for a feature
+ */
+ipcMain.handle(
+  "worktree:get-info",
+  async (_, { projectPath, featureId }) => {
+    try {
+      return await autoModeService.getWorktreeInfo({ projectPath, featureId });
+    } catch (error) {
+      console.error("[IPC] worktree:get-info error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * Get worktree status (changed files, commits)
+ */
+ipcMain.handle(
+  "worktree:get-status",
+  async (_, { projectPath, featureId }) => {
+    try {
+      return await autoModeService.getWorktreeStatus({ projectPath, featureId });
+    } catch (error) {
+      console.error("[IPC] worktree:get-status error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * List all feature worktrees
+ */
+ipcMain.handle("worktree:list", async (_, { projectPath }) => {
+  try {
+    return await autoModeService.listWorktrees({ projectPath });
+  } catch (error) {
+    console.error("[IPC] worktree:list error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get file diffs for a worktree
+ */
+ipcMain.handle("worktree:get-diffs", async (_, { projectPath, featureId }) => {
+  try {
+    return await autoModeService.getFileDiffs({ projectPath, featureId });
+  } catch (error) {
+    console.error("[IPC] worktree:get-diffs error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get diff for a specific file in a worktree
+ */
+ipcMain.handle("worktree:get-file-diff", async (_, { projectPath, featureId, filePath }) => {
+  try {
+    return await autoModeService.getFileDiff({ projectPath, featureId, filePath });
+  } catch (error) {
+    console.error("[IPC] worktree:get-file-diff error:", error);
+    return { success: false, error: error.message };
+  }
+});

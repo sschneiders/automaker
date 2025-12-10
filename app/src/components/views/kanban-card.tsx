@@ -49,6 +49,9 @@ import {
   FileText,
   MoreVertical,
   AlertCircle,
+  GitBranch,
+  Undo2,
+  GitMerge,
 } from "lucide-react";
 import { CountUpTimer } from "@/components/ui/count-up-timer";
 import { getElectronAPI } from "@/lib/electron";
@@ -72,6 +75,8 @@ interface KanbanCardProps {
   onMoveBackToInProgress?: () => void;
   onFollowUp?: () => void;
   onCommit?: () => void;
+  onRevert?: () => void;
+  onMerge?: () => void;
   hasContext?: boolean;
   isCurrentAutoTask?: boolean;
   shortcutKey?: string;
@@ -93,6 +98,8 @@ export function KanbanCard({
   onMoveBackToInProgress,
   onFollowUp,
   onCommit,
+  onRevert,
+  onMerge,
   hasContext,
   isCurrentAutoTask,
   shortcutKey,
@@ -101,8 +108,12 @@ export function KanbanCard({
 }: KanbanCardProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
+  const [isRevertDialogOpen, setIsRevertDialogOpen] = useState(false);
   const [agentInfo, setAgentInfo] = useState<AgentTaskInfo | null>(null);
   const { kanbanCardDetailLevel } = useAppStore();
+
+  // Check if feature has worktree
+  const hasWorktree = !!feature.branchName;
 
   // Helper functions to check what should be shown based on detail level
   const showSteps =
@@ -246,11 +257,33 @@ export function KanbanCard({
           <span>Errored</span>
         </div>
       )}
+      {/* Branch badge - show when feature has a worktree */}
+      {hasWorktree && !isCurrentAutoTask && (
+        <div
+          className={cn(
+            "absolute px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 z-10",
+            "bg-purple-500/20 border border-purple-500/50 text-purple-400",
+            // Position below error badge if present, otherwise use normal position
+            feature.error || feature.skipTests
+              ? "top-8 left-2"
+              : shortcutKey
+                ? "top-2 left-10"
+                : "top-2 left-2"
+          )}
+          data-testid={`branch-badge-${feature.id}`}
+          title={`Branch: ${feature.branchName}`}
+        >
+          <GitBranch className="w-3 h-3" />
+          <span className="truncate max-w-[100px]">{feature.branchName?.replace("feature/", "")}</span>
+        </div>
+      )}
       <CardHeader
         className={cn(
           "p-3 pb-2 block", // Reset grid layout to block for custom kanban card layout
           // Add extra top padding when badges are present to prevent text overlap
-          (feature.skipTests || feature.error || shortcutKey) && "pt-10"
+          (feature.skipTests || feature.error || shortcutKey) && "pt-10",
+          // Add even more top padding when both badges and branch are shown
+          hasWorktree && (feature.skipTests || feature.error) && "pt-14"
         )}
       >
         {isCurrentAutoTask && (
@@ -615,6 +648,23 @@ export function KanbanCard({
           )}
           {!isCurrentAutoTask && feature.status === "waiting_approval" && (
             <>
+              {/* Revert button - only show when worktree exists */}
+              {hasWorktree && onRevert && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsRevertDialogOpen(true);
+                  }}
+                  data-testid={`revert-${feature.id}`}
+                  title="Discard all changes and move back to backlog"
+                >
+                  <Undo2 className="w-3 h-3 mr-1" />
+                  Revert
+                </Button>
+              )}
               {/* Follow-up prompt button */}
               {onFollowUp && (
                 <Button
@@ -631,8 +681,25 @@ export function KanbanCard({
                   Follow-up
                 </Button>
               )}
-              {/* Commit and verify button */}
-              {onCommit && (
+              {/* Merge button - only show when worktree exists */}
+              {hasWorktree && onMerge && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex-1 h-7 text-xs bg-purple-600 hover:bg-purple-700"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMerge();
+                  }}
+                  data-testid={`merge-${feature.id}`}
+                  title="Merge changes into main branch"
+                >
+                  <GitMerge className="w-3 h-3 mr-1" />
+                  Merge
+                </Button>
+              )}
+              {/* Commit and verify button - show when no worktree */}
+              {!hasWorktree && onCommit && (
                 <Button
                   variant="default"
                   size="sm"
@@ -732,6 +799,49 @@ export function KanbanCard({
               data-testid="close-summary-button"
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revert Confirmation Dialog */}
+      <Dialog open={isRevertDialogOpen} onOpenChange={setIsRevertDialogOpen}>
+        <DialogContent data-testid="revert-confirmation-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-400">
+              <Undo2 className="w-5 h-5" />
+              Revert Changes
+            </DialogTitle>
+            <DialogDescription>
+              This will discard all changes made by the agent and move the feature back to the backlog.
+              {feature.branchName && (
+                <span className="block mt-2 font-medium">
+                  Branch <code className="bg-muted px-1 py-0.5 rounded">{feature.branchName}</code> will be deleted.
+                </span>
+              )}
+              <span className="block mt-2 text-red-400 font-medium">
+                This action cannot be undone.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setIsRevertDialogOpen(false)}
+              data-testid="cancel-revert-button"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setIsRevertDialogOpen(false);
+                onRevert?.();
+              }}
+              data-testid="confirm-revert-button"
+            >
+              <Undo2 className="w-4 h-4 mr-2" />
+              Revert Changes
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1090,6 +1090,106 @@ export function BoardView() {
     });
   };
 
+  // Revert feature changes by removing the worktree
+  const handleRevertFeature = async (feature: Feature) => {
+    if (!currentProject) return;
+
+    console.log("[Board] Reverting feature:", {
+      id: feature.id,
+      description: feature.description,
+      branchName: feature.branchName,
+    });
+
+    try {
+      const api = getElectronAPI();
+      if (!api?.worktree?.revertFeature) {
+        console.error("Worktree API not available");
+        toast.error("Revert not available", {
+          description: "This feature is not available in the current version.",
+        });
+        return;
+      }
+
+      const result = await api.worktree.revertFeature(
+        currentProject.path,
+        feature.id
+      );
+
+      if (result.success) {
+        console.log("[Board] Feature reverted successfully");
+        // Reload features to update the UI
+        await loadFeatures();
+        toast.success("Feature reverted", {
+          description: `All changes discarded. Moved back to backlog: ${feature.description.slice(
+            0,
+            50
+          )}${feature.description.length > 50 ? "..." : ""}`,
+        });
+      } else {
+        console.error("[Board] Failed to revert feature:", result.error);
+        toast.error("Failed to revert feature", {
+          description: result.error || "An error occurred",
+        });
+      }
+    } catch (error) {
+      console.error("[Board] Error reverting feature:", error);
+      toast.error("Failed to revert feature", {
+        description:
+          error instanceof Error ? error.message : "An error occurred",
+      });
+    }
+  };
+
+  // Merge feature worktree changes back to main branch
+  const handleMergeFeature = async (feature: Feature) => {
+    if (!currentProject) return;
+
+    console.log("[Board] Merging feature:", {
+      id: feature.id,
+      description: feature.description,
+      branchName: feature.branchName,
+    });
+
+    try {
+      const api = getElectronAPI();
+      if (!api?.worktree?.mergeFeature) {
+        console.error("Worktree API not available");
+        toast.error("Merge not available", {
+          description: "This feature is not available in the current version.",
+        });
+        return;
+      }
+
+      const result = await api.worktree.mergeFeature(
+        currentProject.path,
+        feature.id
+      );
+
+      if (result.success) {
+        console.log("[Board] Feature merged successfully");
+        // Reload features to update the UI
+        await loadFeatures();
+        toast.success("Feature merged", {
+          description: `Changes merged to main branch: ${feature.description.slice(
+            0,
+            50
+          )}${feature.description.length > 50 ? "..." : ""}`,
+        });
+      } else {
+        console.error("[Board] Failed to merge feature:", result.error);
+        toast.error("Failed to merge feature", {
+          description: result.error || "An error occurred",
+        });
+      }
+    } catch (error) {
+      console.error("[Board] Error merging feature:", error);
+      toast.error("Failed to merge feature", {
+        description:
+          error instanceof Error ? error.message : "An error occurred",
+      });
+    }
+  };
+
   const checkContextExists = async (featureId: string): Promise<boolean> => {
     if (!currentProject) return false;
 
@@ -1463,6 +1563,8 @@ export function BoardView() {
                             }
                             onFollowUp={() => handleOpenFollowUp(feature)}
                             onCommit={() => handleCommitFeature(feature)}
+                            onRevert={() => handleRevertFeature(feature)}
+                            onMerge={() => handleMergeFeature(feature)}
                             hasContext={featuresWithContext.has(feature.id)}
                             isCurrentAutoTask={runningAutoTasks.includes(
                               feature.id

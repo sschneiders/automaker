@@ -3,6 +3,7 @@ const featureExecutor = require("./services/feature-executor");
 const featureVerifier = require("./services/feature-verifier");
 const contextManager = require("./services/context-manager");
 const projectAnalyzer = require("./services/project-analyzer");
+const worktreeManager = require("./services/worktree-manager");
 
 /**
  * Auto Mode Service - Autonomous feature implementation
@@ -33,11 +34,66 @@ class AutoModeService {
     const context = {
       abortController: null,
       query: null,
-      projectPath: null,
+      projectPath: null, // Original project path
+      worktreePath: null, // Path to worktree (where agent works)
+      branchName: null, // Feature branch name
       sendToRenderer: null,
       isActive: () => this.runningFeatures.has(featureId),
     };
     return context;
+  }
+
+  /**
+   * Setup worktree for a feature
+   * Creates an isolated git worktree where the agent can work
+   */
+  async setupWorktreeForFeature(feature, projectPath, sendToRenderer) {
+    // Check if worktrees are enabled (project must be a git repo)
+    const isGit = await worktreeManager.isGitRepo(projectPath);
+    if (!isGit) {
+      console.log(`[AutoMode] Project is not a git repo, skipping worktree creation`);
+      return { useWorktree: false, workPath: projectPath };
+    }
+
+    sendToRenderer({
+      type: "auto_mode_progress",
+      featureId: feature.id,
+      content: "Creating isolated worktree for feature...\n",
+    });
+
+    const result = await worktreeManager.createWorktree(projectPath, feature);
+
+    if (!result.success) {
+      console.warn(`[AutoMode] Failed to create worktree: ${result.error}. Falling back to main project.`);
+      sendToRenderer({
+        type: "auto_mode_progress",
+        featureId: feature.id,
+        content: `Warning: Could not create worktree (${result.error}). Working directly on main project.\n`,
+      });
+      return { useWorktree: false, workPath: projectPath };
+    }
+
+    console.log(`[AutoMode] Created worktree at: ${result.worktreePath}, branch: ${result.branchName}`);
+    sendToRenderer({
+      type: "auto_mode_progress",
+      featureId: feature.id,
+      content: `Working in isolated branch: ${result.branchName}\n`,
+    });
+
+    // Update feature with worktree info in feature_list.json
+    await featureLoader.updateFeatureWorktree(
+      feature.id,
+      projectPath,
+      result.worktreePath,
+      result.branchName
+    );
+
+    return {
+      useWorktree: true,
+      workPath: result.worktreePath,
+      branchName: result.branchName,
+      baseBranch: result.baseBranch,
+    };
   }
 
   /**
@@ -134,6 +190,14 @@ class AutoModeService {
 
       console.log(`[AutoMode] Running feature: ${feature.description}`);
 
+      // Setup worktree for isolated work
+      const worktreeSetup = await this.setupWorktreeForFeature(feature, projectPath, sendToRenderer);
+      execution.worktreePath = worktreeSetup.workPath;
+      execution.branchName = worktreeSetup.branchName;
+
+      // Determine working path (worktree or main project)
+      const workPath = worktreeSetup.workPath;
+
       // Update feature status to in_progress
       await featureLoader.updateFeatureStatus(
         featureId,
@@ -144,24 +208,27 @@ class AutoModeService {
       sendToRenderer({
         type: "auto_mode_feature_start",
         featureId: feature.id,
-        feature: feature,
+        feature: { ...feature, worktreePath: worktreeSetup.workPath, branchName: worktreeSetup.branchName },
       });
 
-      // Implement the feature
+      // Implement the feature (agent works in worktree)
       const result = await featureExecutor.implementFeature(
         feature,
-        projectPath,
+        workPath, // Use worktree path instead of main project
         sendToRenderer,
         execution
       );
 
       // Update feature status based on result
       // For skipTests features, go to waiting_approval on success instead of verified
+      // On failure, skipTests features should also go to waiting_approval for user review
       let newStatus;
       if (result.passes) {
         newStatus = feature.skipTests ? "waiting_approval" : "verified";
       } else {
-        newStatus = "backlog";
+        // For skipTests features, keep in waiting_approval so user can review
+        // For normal TDD features, move to backlog for retry
+        newStatus = feature.skipTests ? "waiting_approval" : "backlog";
       }
       await featureLoader.updateFeatureStatus(
         feature.id,
@@ -575,6 +642,14 @@ class AutoModeService {
       execution.sendToRenderer = sendToRenderer;
       this.runningFeatures.set(featureId, execution);
 
+      // Setup worktree for isolated work
+      const worktreeSetup = await this.setupWorktreeForFeature(feature, projectPath, sendToRenderer);
+      execution.worktreePath = worktreeSetup.workPath;
+      execution.branchName = worktreeSetup.branchName;
+
+      // Determine working path (worktree or main project)
+      const workPath = worktreeSetup.workPath;
+
       // Update status to in_progress with timestamp
       await featureLoader.updateFeatureStatus(
         featureId,
@@ -585,23 +660,27 @@ class AutoModeService {
       sendToRenderer({
         type: "auto_mode_feature_start",
         featureId: feature.id,
-        feature: feature,
+        feature: { ...feature, worktreePath: worktreeSetup.workPath, branchName: worktreeSetup.branchName },
       });
 
-      // Implement the feature (this runs async in background)
+      // Implement the feature (agent works in worktree)
       const result = await featureExecutor.implementFeature(
         feature,
-        projectPath,
+        workPath, // Use worktree path instead of main project
         sendToRenderer,
         execution
       );
 
       // Update feature status based on result
+      // For skipTests features, go to waiting_approval on success instead of verified
+      // On failure, skipTests features should also go to waiting_approval for user review
       let newStatus;
       if (result.passes) {
         newStatus = feature.skipTests ? "waiting_approval" : "verified";
       } else {
-        newStatus = "backlog";
+        // For skipTests features, keep in waiting_approval so user can review
+        // For normal TDD features, move to backlog for retry
+        newStatus = feature.skipTests ? "waiting_approval" : "backlog";
       }
       await featureLoader.updateFeatureStatus(
         feature.id,
@@ -974,6 +1053,170 @@ class AutoModeService {
    */
   sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Revert feature changes by removing the worktree
+   * This effectively discards all changes made by the agent
+   */
+  async revertFeature({ projectPath, featureId, sendToRenderer }) {
+    console.log(`[AutoMode] Reverting feature: ${featureId}`);
+
+    try {
+      // Stop the feature if it's running
+      if (this.runningFeatures.has(featureId)) {
+        await this.stopFeature({ featureId });
+      }
+
+      // Remove the worktree and delete the branch
+      const result = await worktreeManager.removeWorktree(projectPath, featureId, true);
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to remove worktree");
+      }
+
+      // Clear worktree info from feature
+      await featureLoader.updateFeatureWorktree(featureId, projectPath, null, null);
+
+      // Update feature status back to backlog
+      await featureLoader.updateFeatureStatus(featureId, "backlog", projectPath);
+
+      // Delete context file
+      await contextManager.deleteContextFile(projectPath, featureId);
+
+      if (sendToRenderer) {
+        sendToRenderer({
+          type: "auto_mode_feature_complete",
+          featureId: featureId,
+          passes: false,
+          message: "Feature reverted - all changes discarded",
+        });
+      }
+
+      console.log(`[AutoMode] Feature ${featureId} reverted successfully`);
+      return { success: true, removedPath: result.removedPath };
+    } catch (error) {
+      console.error("[AutoMode] Error reverting feature:", error);
+      if (sendToRenderer) {
+        sendToRenderer({
+          type: "auto_mode_error",
+          error: error.message,
+          featureId: featureId,
+        });
+      }
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Merge feature worktree changes back to main branch
+   */
+  async mergeFeature({ projectPath, featureId, options = {}, sendToRenderer }) {
+    console.log(`[AutoMode] Merging feature: ${featureId}`);
+
+    try {
+      // Load feature to get worktree info
+      const features = await featureLoader.loadFeatures(projectPath);
+      const feature = features.find((f) => f.id === featureId);
+
+      if (!feature) {
+        throw new Error(`Feature ${featureId} not found`);
+      }
+
+      if (sendToRenderer) {
+        sendToRenderer({
+          type: "auto_mode_progress",
+          featureId: featureId,
+          content: "Merging feature branch into main...\n",
+        });
+      }
+
+      // Merge the worktree
+      const result = await worktreeManager.mergeWorktree(projectPath, featureId, {
+        ...options,
+        cleanup: true, // Remove worktree after successful merge
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to merge worktree");
+      }
+
+      // Clear worktree info from feature
+      await featureLoader.updateFeatureWorktree(featureId, projectPath, null, null);
+
+      // Update feature status to verified
+      await featureLoader.updateFeatureStatus(featureId, "verified", projectPath);
+
+      if (sendToRenderer) {
+        sendToRenderer({
+          type: "auto_mode_feature_complete",
+          featureId: featureId,
+          passes: true,
+          message: `Feature merged into ${result.intoBranch}`,
+        });
+      }
+
+      console.log(`[AutoMode] Feature ${featureId} merged successfully`);
+      return { success: true, mergedBranch: result.mergedBranch };
+    } catch (error) {
+      console.error("[AutoMode] Error merging feature:", error);
+      if (sendToRenderer) {
+        sendToRenderer({
+          type: "auto_mode_error",
+          error: error.message,
+          featureId: featureId,
+        });
+      }
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get worktree info for a feature
+   */
+  async getWorktreeInfo({ projectPath, featureId }) {
+    return await worktreeManager.getWorktreeInfo(projectPath, featureId);
+  }
+
+  /**
+   * Get worktree status (changed files, commits, etc.)
+   */
+  async getWorktreeStatus({ projectPath, featureId }) {
+    const worktreeInfo = await worktreeManager.getWorktreeInfo(projectPath, featureId);
+    if (!worktreeInfo.success) {
+      return { success: false, error: "Worktree not found" };
+    }
+    return await worktreeManager.getWorktreeStatus(worktreeInfo.worktreePath);
+  }
+
+  /**
+   * List all feature worktrees
+   */
+  async listWorktrees({ projectPath }) {
+    const worktrees = await worktreeManager.getAllFeatureWorktrees(projectPath);
+    return { success: true, worktrees };
+  }
+
+  /**
+   * Get file diffs for a feature worktree
+   */
+  async getFileDiffs({ projectPath, featureId }) {
+    const worktreeInfo = await worktreeManager.getWorktreeInfo(projectPath, featureId);
+    if (!worktreeInfo.success) {
+      return { success: false, error: "Worktree not found" };
+    }
+    return await worktreeManager.getFileDiffs(worktreeInfo.worktreePath);
+  }
+
+  /**
+   * Get diff for a specific file in a feature worktree
+   */
+  async getFileDiff({ projectPath, featureId, filePath }) {
+    const worktreeInfo = await worktreeManager.getWorktreeInfo(projectPath, featureId);
+    if (!worktreeInfo.success) {
+      return { success: false, error: "Worktree not found" };
+    }
+    return await worktreeManager.getFileDiff(worktreeInfo.worktreePath, filePath);
   }
 }
 

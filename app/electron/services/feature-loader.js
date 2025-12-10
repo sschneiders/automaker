@@ -141,6 +141,13 @@ class FeatureLoader {
       if (f.error !== undefined) {
         featureData.error = f.error;
       }
+      // Preserve worktree info
+      if (f.worktreePath !== undefined) {
+        featureData.worktreePath = f.worktreePath;
+      }
+      if (f.branchName !== undefined) {
+        featureData.branchName = f.branchName;
+      }
       return featureData;
     });
 
@@ -162,6 +169,69 @@ class FeatureLoader {
     // Find first feature that is in backlog or in_progress status
     // Skip verified and waiting_approval (which needs user input)
     return features.find((f) => f.status !== "verified" && f.status !== "waiting_approval");
+  }
+
+  /**
+   * Update worktree info for a feature
+   * @param {string} featureId - The ID of the feature to update
+   * @param {string} projectPath - Path to the project
+   * @param {string|null} worktreePath - Path to the worktree (null to clear)
+   * @param {string|null} branchName - Name of the feature branch (null to clear)
+   */
+  async updateFeatureWorktree(featureId, projectPath, worktreePath, branchName) {
+    const featuresPath = path.join(
+      projectPath,
+      ".automaker",
+      "feature_list.json"
+    );
+
+    const features = await this.loadFeatures(projectPath);
+
+    if (!Array.isArray(features) || features.length === 0) {
+      console.error("[FeatureLoader] Cannot update worktree: feature list is empty");
+      return;
+    }
+
+    const feature = features.find((f) => f.id === featureId);
+
+    if (!feature) {
+      console.error(`[FeatureLoader] Feature ${featureId} not found`);
+      return;
+    }
+
+    // Update or clear worktree info
+    if (worktreePath) {
+      feature.worktreePath = worktreePath;
+      feature.branchName = branchName;
+    } else {
+      delete feature.worktreePath;
+      delete feature.branchName;
+    }
+
+    // Save back to file (reuse the same mapping logic)
+    const toSave = features.map((f) => {
+      const featureData = {
+        id: f.id,
+        category: f.category,
+        description: f.description,
+        steps: f.steps,
+        status: f.status,
+      };
+      if (f.skipTests !== undefined) featureData.skipTests = f.skipTests;
+      if (f.images !== undefined) featureData.images = f.images;
+      if (f.imagePaths !== undefined) featureData.imagePaths = f.imagePaths;
+      if (f.startedAt !== undefined) featureData.startedAt = f.startedAt;
+      if (f.summary !== undefined) featureData.summary = f.summary;
+      if (f.model !== undefined) featureData.model = f.model;
+      if (f.thinkingLevel !== undefined) featureData.thinkingLevel = f.thinkingLevel;
+      if (f.error !== undefined) featureData.error = f.error;
+      if (f.worktreePath !== undefined) featureData.worktreePath = f.worktreePath;
+      if (f.branchName !== undefined) featureData.branchName = f.branchName;
+      return featureData;
+    });
+
+    await fs.writeFile(featuresPath, JSON.stringify(toSave, null, 2), "utf-8");
+    console.log(`[FeatureLoader] Updated feature ${featureId}: worktreePath=${worktreePath}, branchName=${branchName}`);
   }
 }
 

@@ -8,9 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, List, FileText } from "lucide-react";
+import { Loader2, List, FileText, GitBranch } from "lucide-react";
 import { getElectronAPI } from "@/lib/electron";
 import { LogViewer } from "@/components/ui/log-viewer";
+import { GitDiffPanel } from "@/components/ui/git-diff-panel";
 import type { AutoModeEvent } from "@/types/electron";
 
 interface AgentOutputModalProps {
@@ -22,7 +23,7 @@ interface AgentOutputModalProps {
   onNumberKeyPress?: (key: string) => void;
 }
 
-type ViewMode = "parsed" | "raw";
+type ViewMode = "parsed" | "raw" | "changes";
 
 export function AgentOutputModal({
   open,
@@ -34,6 +35,7 @@ export function AgentOutputModal({
   const [output, setOutput] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("parsed");
+  const [projectPath, setProjectPath] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
   const projectPathRef = useRef<string>("");
@@ -64,6 +66,7 @@ export function AgentOutputModal({
         }
 
         projectPathRef.current = currentProject.path;
+        setProjectPath(currentProject.path);
 
         // Ensure context directory exists
         const contextDir = `${currentProject.path}/.automaker/agents-context`;
@@ -257,7 +260,19 @@ export function AgentOutputModal({
                 data-testid="view-mode-parsed"
               >
                 <List className="w-3.5 h-3.5" />
-                Parsed
+                Logs
+              </button>
+              <button
+                onClick={() => setViewMode("changes")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  viewMode === "changes"
+                    ? "bg-primary/20 text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+                data-testid="view-mode-changes"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                Changes
               </button>
               <button
                 onClick={() => setViewMode("raw")}
@@ -281,34 +296,54 @@ export function AgentOutputModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-y-auto bg-zinc-950 rounded-lg p-4 font-mono text-xs min-h-[400px] max-h-[60vh]"
-        >
-          {isLoading && !output ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <Loader2 className="w-6 h-6 animate-spin mr-2" />
-              Loading output...
+        {viewMode === "changes" ? (
+          <div className="flex-1 overflow-y-auto min-h-[400px] max-h-[60vh]">
+            {projectPath ? (
+              <GitDiffPanel
+                projectPath={projectPath}
+                featureId={featureId}
+                compact={false}
+                className="border-0 rounded-lg"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading...
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto bg-zinc-950 rounded-lg p-4 font-mono text-xs min-h-[400px] max-h-[60vh]"
+            >
+              {isLoading && !output ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                  Loading output...
+                </div>
+              ) : !output ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No output yet. The agent will stream output here as it works.
+                </div>
+              ) : viewMode === "parsed" ? (
+                <LogViewer output={output} />
+              ) : (
+                <div className="whitespace-pre-wrap break-words text-zinc-300">
+                  {output}
+                </div>
+              )}
             </div>
-          ) : !output ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No output yet. The agent will stream output here as it works.
-            </div>
-          ) : viewMode === "parsed" ? (
-            <LogViewer output={output} />
-          ) : (
-            <div className="whitespace-pre-wrap break-words text-zinc-300">
-              {output}
-            </div>
-          )}
-        </div>
 
-        <div className="text-xs text-muted-foreground text-center flex-shrink-0">
-          {autoScrollRef.current
-            ? "Auto-scrolling enabled"
-            : "Scroll to bottom to enable auto-scroll"}
-        </div>
+            <div className="text-xs text-muted-foreground text-center flex-shrink-0">
+              {autoScrollRef.current
+                ? "Auto-scrolling enabled"
+                : "Scroll to bottom to enable auto-scroll"}
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

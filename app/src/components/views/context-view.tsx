@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import {
   useKeyboardShortcuts,
-  ACTION_SHORTCUTS,
+  useKeyboardShortcutsConfig,
   KeyboardShortcut,
 } from "@/hooks/use-keyboard-shortcuts";
 import {
@@ -44,6 +44,7 @@ interface ContextFile {
 
 export function ContextView() {
   const { currentProject } = useAppStore();
+  const shortcuts = useKeyboardShortcutsConfig();
   const [contextFiles, setContextFiles] = useState<ContextFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<ContextFile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,12 +65,12 @@ export function ContextView() {
   const contextShortcuts: KeyboardShortcut[] = useMemo(
     () => [
       {
-        key: ACTION_SHORTCUTS.addContextFile,
+        key: shortcuts.addContextFile,
         action: () => setIsAddDialogOpen(true),
         description: "Add new context file",
       },
     ],
-    []
+    [shortcuts]
   );
   useKeyboardShortcuts(contextShortcuts);
 
@@ -367,7 +368,7 @@ export function ContextView() {
           <HotkeyButton
             size="sm"
             onClick={() => setIsAddDialogOpen(true)}
-            hotkey={ACTION_SHORTCUTS.addContextFile}
+            hotkey={shortcuts.addContextFile}
             hotkeyActive={false}
             data-testid="add-context-file"
           >
@@ -501,7 +502,9 @@ export function ContextView() {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <File className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-foreground-secondary">Select a file to view or edit</p>
+                <p className="text-foreground-secondary">
+                  Select a file to view or edit
+                </p>
                 <p className="text-muted-foreground text-sm mt-1">
                   Or drop files here to add them
                 </p>

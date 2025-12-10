@@ -98,7 +98,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAutoMode } from "@/hooks/use-auto-mode";
 import {
   useKeyboardShortcuts,
-  ACTION_SHORTCUTS,
+  useKeyboardShortcutsConfig,
   KeyboardShortcut,
 } from "@/hooks/use-keyboard-shortcuts";
 import { useWindowState } from "@/hooks/use-window-state";
@@ -176,7 +176,10 @@ const CODEX_MODELS: ModelOption[] = [
 ];
 
 // Profile icon mapping
-const PROFILE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+const PROFILE_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = {
   Brain,
   Zap,
   Scale,
@@ -203,6 +206,7 @@ export function BoardView() {
     kanbanCardDetailLevel,
     setKanbanCardDetailLevel,
   } = useAppStore();
+  const shortcuts = useKeyboardShortcutsConfig();
   const [activeFeature, setActiveFeature] = useState<Feature | null>(null);
   const [editingFeature, setEditingFeature] = useState<Feature | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -233,9 +237,8 @@ export function BoardView() {
     DescriptionImagePath[]
   >([]);
   // Preview maps to persist image previews across tab switches
-  const [newFeaturePreviewMap, setNewFeaturePreviewMap] = useState<ImagePreviewMap>(
-    () => new Map()
-  );
+  const [newFeaturePreviewMap, setNewFeaturePreviewMap] =
+    useState<ImagePreviewMap>(() => new Map());
   const [followUpPreviewMap, setFollowUpPreviewMap] = useState<ImagePreviewMap>(
     () => new Map()
   );
@@ -313,14 +316,14 @@ export function BoardView() {
 
   // Keyboard shortcuts for this view
   const boardShortcuts: KeyboardShortcut[] = useMemo(() => {
-    const shortcuts: KeyboardShortcut[] = [
+    const shortcutsList: KeyboardShortcut[] = [
       {
-        key: ACTION_SHORTCUTS.addFeature,
+        key: shortcuts.addFeature,
         action: () => setShowAddDialog(true),
         description: "Add new feature",
       },
       {
-        key: ACTION_SHORTCUTS.startNext,
+        key: shortcuts.startNext,
         action: () => startNextFeaturesRef.current(),
         description: "Start next features from backlog",
       },
@@ -335,7 +338,7 @@ export function BoardView() {
     inProgressFeaturesForShortcuts.slice(0, 10).forEach((feature, index) => {
       // Keys 1-9 for first 9 cards, 0 for 10th card
       const key = index === 9 ? "0" : String(index + 1);
-      shortcuts.push({
+      shortcutsList.push({
         key,
         action: () => {
           setOutputFeature(feature);
@@ -345,8 +348,8 @@ export function BoardView() {
       });
     });
 
-    return shortcuts;
-  }, [inProgressFeaturesForShortcuts]);
+    return shortcutsList;
+  }, [inProgressFeaturesForShortcuts, shortcuts]);
   useKeyboardShortcuts(boardShortcuts);
 
   // Prevent hydration issues
@@ -1510,7 +1513,10 @@ export function BoardView() {
         const isSelected = selectedModel === option.id;
         const isCodex = option.provider === "codex";
         // Shorter display names for compact view
-        const shortName = option.label.replace("Claude ", "").replace("GPT-5.1 Codex ", "").replace("GPT-5.1 ", "");
+        const shortName = option.label
+          .replace("Claude ", "")
+          .replace("GPT-5.1 Codex ", "")
+          .replace("GPT-5.1 ", "");
         return (
           <button
             key={option.id}
@@ -1626,7 +1632,7 @@ export function BoardView() {
           <HotkeyButton
             size="sm"
             onClick={() => setShowAddDialog(true)}
-            hotkey={ACTION_SHORTCUTS.addFeature}
+            hotkey={shortcuts.addFeature}
             hotkeyActive={false}
             data-testid="add-feature-button"
           >
@@ -1794,7 +1800,7 @@ export function BoardView() {
                               size="sm"
                               className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
                               onClick={handleStartNextFeatures}
-                              hotkey={ACTION_SHORTCUTS.startNext}
+                              hotkey={shortcuts.startNext}
                               hotkeyActive={false}
                               data-testid="start-next-button"
                             >
@@ -1867,26 +1873,29 @@ export function BoardView() {
       </div>
 
       {/* Add Feature Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={(open) => {
-        setShowAddDialog(open);
-        // Clear preview map, validation error, and reset advanced options when dialog closes
-        if (!open) {
-          setNewFeaturePreviewMap(new Map());
-          setShowAdvancedOptions(false);
-          setDescriptionError(false);
-        }
-      }}>
-        <DialogContent
-          compact={!isMaximized}
-          data-testid="add-feature-dialog"
-        >
+      <Dialog
+        open={showAddDialog}
+        onOpenChange={(open) => {
+          setShowAddDialog(open);
+          // Clear preview map, validation error, and reset advanced options when dialog closes
+          if (!open) {
+            setNewFeaturePreviewMap(new Map());
+            setShowAdvancedOptions(false);
+            setDescriptionError(false);
+          }
+        }}
+      >
+        <DialogContent compact={!isMaximized} data-testid="add-feature-dialog">
           <DialogHeader>
             <DialogTitle>Add New Feature</DialogTitle>
             <DialogDescription>
               Create a new feature card for the Kanban board.
             </DialogDescription>
           </DialogHeader>
-          <Tabs defaultValue="prompt" className="py-4 flex-1 min-h-0 flex flex-col">
+          <Tabs
+            defaultValue="prompt"
+            className="py-4 flex-1 min-h-0 flex flex-col"
+          >
             <TabsList className="w-full grid grid-cols-3 mb-4">
               <TabsTrigger value="prompt" data-testid="tab-prompt">
                 <MessageSquare className="w-4 h-4 mr-2" />
@@ -1949,7 +1958,8 @@ export function BoardView() {
                       Simple Mode Active
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Only showing AI profiles. Advanced model tweaking is hidden.
+                      Only showing AI profiles. Advanced model tweaking is
+                      hidden.
                     </p>
                   </div>
                   <Button
@@ -1959,7 +1969,7 @@ export function BoardView() {
                     data-testid="show-advanced-options-toggle"
                   >
                     <Settings2 className="w-4 h-4 mr-2" />
-                    {showAdvancedOptions ? 'Hide' : 'Show'} Advanced
+                    {showAdvancedOptions ? "Hide" : "Show"} Advanced
                   </Button>
                 </div>
               )}
@@ -1978,9 +1988,12 @@ export function BoardView() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {aiProfiles.slice(0, 6).map((profile) => {
-                      const IconComponent = profile.icon ? PROFILE_ICONS[profile.icon] : Brain;
+                      const IconComponent = profile.icon
+                        ? PROFILE_ICONS[profile.icon]
+                        : Brain;
                       const isCodex = profile.provider === "codex";
-                      const isSelected = newFeature.model === profile.model &&
+                      const isSelected =
+                        newFeature.model === profile.model &&
                         newFeature.thinkingLevel === profile.thinkingLevel;
                       return (
                         <button
@@ -1994,7 +2007,8 @@ export function BoardView() {
                             });
                             if (profile.thinkingLevel === "ultrathink") {
                               toast.warning("Ultrathink Selected", {
-                                description: "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task).",
+                                description:
+                                  "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task).",
                                 duration: 4000,
                               });
                             }
@@ -2007,21 +2021,29 @@ export function BoardView() {
                           )}
                           data-testid={`profile-quick-select-${profile.id}`}
                         >
-                          <div className={cn(
-                            "w-7 h-7 rounded flex items-center justify-center flex-shrink-0",
-                            isCodex ? "bg-emerald-500/10" : "bg-primary/10"
-                          )}>
+                          <div
+                            className={cn(
+                              "w-7 h-7 rounded flex items-center justify-center flex-shrink-0",
+                              isCodex ? "bg-emerald-500/10" : "bg-primary/10"
+                            )}
+                          >
                             {IconComponent && (
-                              <IconComponent className={cn(
-                                "w-4 h-4",
-                                isCodex ? "text-emerald-500" : "text-primary"
-                              )} />
+                              <IconComponent
+                                className={cn(
+                                  "w-4 h-4",
+                                  isCodex ? "text-emerald-500" : "text-primary"
+                                )}
+                              />
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">{profile.name}</p>
+                            <p className="text-sm font-medium truncate">
+                              {profile.name}
+                            </p>
                             <p className="text-[10px] text-muted-foreground truncate">
-                              {profile.model}{profile.thinkingLevel !== "none" && ` + ${profile.thinkingLevel}`}
+                              {profile.model}
+                              {profile.thinkingLevel !== "none" &&
+                                ` + ${profile.thinkingLevel}`}
                             </p>
                           </div>
                         </button>
@@ -2045,107 +2067,122 @@ export function BoardView() {
               )}
 
               {/* Separator */}
-              {aiProfiles.length > 0 && (!showProfilesOnly || showAdvancedOptions) && <div className="border-t border-border" />}
+              {aiProfiles.length > 0 &&
+                (!showProfilesOnly || showAdvancedOptions) && (
+                  <div className="border-t border-border" />
+                )}
 
               {/* Claude Models Section - Hidden when showProfilesOnly is true and showAdvancedOptions is false */}
               {(!showProfilesOnly || showAdvancedOptions) && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-primary" />
-                    Claude (SDK)
-                  </Label>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-primary/40 text-primary">
-                    Native
-                  </span>
-                </div>
-                {renderModelOptions(
-                  CLAUDE_MODELS,
-                  newFeature.model,
-                  (model) =>
-                    setNewFeature({
-                      ...newFeature,
-                      model,
-                      thinkingLevel: modelSupportsThinking(model)
-                        ? newFeature.thinkingLevel
-                        : "none",
-                    })
-                )}
-
-                {/* Thinking Level - Only shown when Claude model is selected */}
-                {newModelAllowsThinking && (
-                  <div className="space-y-2 pt-2 border-t border-border">
-                    <Label className="flex items-center gap-2 text-sm">
-                      <Brain className="w-3.5 h-3.5 text-muted-foreground" />
-                      Thinking Level
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-primary" />
+                      Claude (SDK)
                     </Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {(["none", "low", "medium", "high", "ultrathink"] as ThinkingLevel[]).map((level) => (
-                        <button
-                          key={level}
-                          type="button"
-                          onClick={() => {
-                            setNewFeature({ ...newFeature, thinkingLevel: level });
-                            if (level === "ultrathink") {
-                              toast.warning("Ultrathink Selected", {
-                                description: "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task). Best for complex architecture, migrations, or debugging.",
-                                duration: 5000
-                              });
-                            }
-                          }}
-                          className={cn(
-                            "flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors min-w-[60px]",
-                            newFeature.thinkingLevel === level
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-background hover:bg-accent border-input"
-                          )}
-                          data-testid={`thinking-level-${level}`}
-                        >
-                          {level === "none" && "None"}
-                          {level === "low" && "Low"}
-                          {level === "medium" && "Med"}
-                          {level === "high" && "High"}
-                          {level === "ultrathink" && "Ultra"}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Higher levels give more time to reason through complex problems.
-                    </p>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-primary/40 text-primary">
+                      Native
+                    </span>
                   </div>
-                )}
-              </div>
+                  {renderModelOptions(
+                    CLAUDE_MODELS,
+                    newFeature.model,
+                    (model) =>
+                      setNewFeature({
+                        ...newFeature,
+                        model,
+                        thinkingLevel: modelSupportsThinking(model)
+                          ? newFeature.thinkingLevel
+                          : "none",
+                      })
+                  )}
+
+                  {/* Thinking Level - Only shown when Claude model is selected */}
+                  {newModelAllowsThinking && (
+                    <div className="space-y-2 pt-2 border-t border-border">
+                      <Label className="flex items-center gap-2 text-sm">
+                        <Brain className="w-3.5 h-3.5 text-muted-foreground" />
+                        Thinking Level
+                      </Label>
+                      <div className="flex gap-2 flex-wrap">
+                        {(
+                          [
+                            "none",
+                            "low",
+                            "medium",
+                            "high",
+                            "ultrathink",
+                          ] as ThinkingLevel[]
+                        ).map((level) => (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => {
+                              setNewFeature({
+                                ...newFeature,
+                                thinkingLevel: level,
+                              });
+                              if (level === "ultrathink") {
+                                toast.warning("Ultrathink Selected", {
+                                  description:
+                                    "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task). Best for complex architecture, migrations, or debugging.",
+                                  duration: 5000,
+                                });
+                              }
+                            }}
+                            className={cn(
+                              "flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors min-w-[60px]",
+                              newFeature.thinkingLevel === level
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background hover:bg-accent border-input"
+                            )}
+                            data-testid={`thinking-level-${level}`}
+                          >
+                            {level === "none" && "None"}
+                            {level === "low" && "Low"}
+                            {level === "medium" && "Med"}
+                            {level === "high" && "High"}
+                            {level === "ultrathink" && "Ultra"}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Higher levels give more time to reason through complex
+                        problems.
+                      </p>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Separator */}
-              {(!showProfilesOnly || showAdvancedOptions) && <div className="border-t border-border" />}
+              {(!showProfilesOnly || showAdvancedOptions) && (
+                <div className="border-t border-border" />
+              )}
 
               {/* Codex Models Section - Hidden when showProfilesOnly is true and showAdvancedOptions is false */}
               {(!showProfilesOnly || showAdvancedOptions) && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-emerald-500" />
-                    OpenAI via Codex CLI
-                  </Label>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/50 text-emerald-600 dark:text-emerald-300">
-                    CLI
-                  </span>
-                </div>
-                {renderModelOptions(
-                  CODEX_MODELS,
-                  newFeature.model,
-                  (model) =>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-emerald-500" />
+                      OpenAI via Codex CLI
+                    </Label>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/50 text-emerald-600 dark:text-emerald-300">
+                      CLI
+                    </span>
+                  </div>
+                  {renderModelOptions(CODEX_MODELS, newFeature.model, (model) =>
                     setNewFeature({
                       ...newFeature,
                       model,
                       thinkingLevel: "none",
                     })
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Codex models do not support thinking levels.
-                </p>
-              </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Codex models do not support thinking levels.
+                  </p>
+                </div>
               )}
             </TabsContent>
 
@@ -2156,12 +2193,18 @@ export function BoardView() {
                   id="skip-tests"
                   checked={newFeature.skipTests}
                   onCheckedChange={(checked) =>
-                    setNewFeature({ ...newFeature, skipTests: checked === true })
+                    setNewFeature({
+                      ...newFeature,
+                      skipTests: checked === true,
+                    })
                   }
                   data-testid="skip-tests-checkbox"
                 />
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="skip-tests" className="text-sm cursor-pointer">
+                  <Label
+                    htmlFor="skip-tests"
+                    className="text-sm cursor-pointer"
+                  >
                     Skip automated testing
                   </Label>
                   <FlaskConical className="w-3.5 h-3.5 text-muted-foreground" />
@@ -2242,7 +2285,10 @@ export function BoardView() {
             <DialogDescription>Modify the feature details.</DialogDescription>
           </DialogHeader>
           {editingFeature && (
-            <Tabs defaultValue="prompt" className="py-4 flex-1 min-h-0 flex flex-col">
+            <Tabs
+              defaultValue="prompt"
+              className="py-4 flex-1 min-h-0 flex flex-col"
+            >
               <TabsList className="w-full grid grid-cols-3 mb-4">
                 <TabsTrigger value="prompt" data-testid="edit-tab-prompt">
                   <MessageSquare className="w-4 h-4 mr-2" />
@@ -2302,17 +2348,20 @@ export function BoardView() {
                         Simple Mode Active
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Only showing AI profiles. Advanced model tweaking is hidden.
+                        Only showing AI profiles. Advanced model tweaking is
+                        hidden.
                       </p>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setShowEditAdvancedOptions(!showEditAdvancedOptions)}
+                      onClick={() =>
+                        setShowEditAdvancedOptions(!showEditAdvancedOptions)
+                      }
                       data-testid="edit-show-advanced-options-toggle"
                     >
                       <Settings2 className="w-4 h-4 mr-2" />
-                      {showEditAdvancedOptions ? 'Hide' : 'Show'} Advanced
+                      {showEditAdvancedOptions ? "Hide" : "Show"} Advanced
                     </Button>
                   </div>
                 )}
@@ -2331,10 +2380,14 @@ export function BoardView() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {aiProfiles.slice(0, 6).map((profile) => {
-                        const IconComponent = profile.icon ? PROFILE_ICONS[profile.icon] : Brain;
+                        const IconComponent = profile.icon
+                          ? PROFILE_ICONS[profile.icon]
+                          : Brain;
                         const isCodex = profile.provider === "codex";
-                        const isSelected = editingFeature.model === profile.model &&
-                          editingFeature.thinkingLevel === profile.thinkingLevel;
+                        const isSelected =
+                          editingFeature.model === profile.model &&
+                          editingFeature.thinkingLevel ===
+                            profile.thinkingLevel;
                         return (
                           <button
                             key={profile.id}
@@ -2347,7 +2400,8 @@ export function BoardView() {
                               });
                               if (profile.thinkingLevel === "ultrathink") {
                                 toast.warning("Ultrathink Selected", {
-                                  description: "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task).",
+                                  description:
+                                    "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task).",
                                   duration: 4000,
                                 });
                               }
@@ -2360,21 +2414,31 @@ export function BoardView() {
                             )}
                             data-testid={`edit-profile-quick-select-${profile.id}`}
                           >
-                            <div className={cn(
-                              "w-7 h-7 rounded flex items-center justify-center flex-shrink-0",
-                              isCodex ? "bg-emerald-500/10" : "bg-primary/10"
-                            )}>
+                            <div
+                              className={cn(
+                                "w-7 h-7 rounded flex items-center justify-center flex-shrink-0",
+                                isCodex ? "bg-emerald-500/10" : "bg-primary/10"
+                              )}
+                            >
                               {IconComponent && (
-                                <IconComponent className={cn(
-                                  "w-4 h-4",
-                                  isCodex ? "text-emerald-500" : "text-primary"
-                                )} />
+                                <IconComponent
+                                  className={cn(
+                                    "w-4 h-4",
+                                    isCodex
+                                      ? "text-emerald-500"
+                                      : "text-primary"
+                                  )}
+                                />
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{profile.name}</p>
+                              <p className="text-sm font-medium truncate">
+                                {profile.name}
+                              </p>
                               <p className="text-[10px] text-muted-foreground truncate">
-                                {profile.model}{profile.thinkingLevel !== "none" && ` + ${profile.thinkingLevel}`}
+                                {profile.model}
+                                {profile.thinkingLevel !== "none" &&
+                                  ` + ${profile.thinkingLevel}`}
                               </p>
                             </div>
                           </button>
@@ -2388,114 +2452,136 @@ export function BoardView() {
                 )}
 
                 {/* Separator */}
-                {aiProfiles.length > 0 && (!showProfilesOnly || showEditAdvancedOptions) && <div className="border-t border-border" />}
+                {aiProfiles.length > 0 &&
+                  (!showProfilesOnly || showEditAdvancedOptions) && (
+                    <div className="border-t border-border" />
+                  )}
 
                 {/* Claude Models Section - Hidden when showProfilesOnly is true and showEditAdvancedOptions is false */}
                 {(!showProfilesOnly || showEditAdvancedOptions) && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-2">
-                      <Brain className="w-4 h-4 text-primary" />
-                      Claude (SDK)
-                    </Label>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-primary/40 text-primary">
-                      Native
-                    </span>
-                  </div>
-                  {renderModelOptions(
-                    CLAUDE_MODELS,
-                    (editingFeature.model ?? "opus") as AgentModel,
-                    (model) =>
-                      setEditingFeature({
-                        ...editingFeature,
-                        model,
-                        thinkingLevel: modelSupportsThinking(model)
-                          ? editingFeature.thinkingLevel
-                          : "none",
-                      }),
-                    "edit-model-select"
-                  )}
-
-                  {/* Thinking Level - Only shown when Claude model is selected */}
-                  {editModelAllowsThinking && (
-                    <div className="space-y-2 pt-2 border-t border-border">
-                      <Label className="flex items-center gap-2 text-sm">
-                        <Brain className="w-3.5 h-3.5 text-muted-foreground" />
-                        Thinking Level
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2">
+                        <Brain className="w-4 h-4 text-primary" />
+                        Claude (SDK)
                       </Label>
-                      <div className="flex gap-2 flex-wrap">
-                        {(["none", "low", "medium", "high", "ultrathink"] as ThinkingLevel[]).map((level) => (
-                          <button
-                            key={level}
-                            type="button"
-                            onClick={() => {
-                              setEditingFeature({ ...editingFeature, thinkingLevel: level });
-                              if (level === "ultrathink") {
-                                toast.warning("Ultrathink Selected", {
-                                  description: "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task). Best for complex architecture, migrations, or debugging.",
-                                  duration: 5000
-                                });
-                              }
-                            }}
-                            className={cn(
-                              "flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors min-w-[60px]",
-                              (editingFeature.thinkingLevel ?? "none") === level
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background hover:bg-accent border-input"
-                            )}
-                            data-testid={`edit-thinking-level-${level}`}
-                          >
-                            {level === "none" && "None"}
-                            {level === "low" && "Low"}
-                            {level === "medium" && "Med"}
-                            {level === "high" && "High"}
-                            {level === "ultrathink" && "Ultra"}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Higher levels give more time to reason through complex problems.
-                      </p>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full border border-primary/40 text-primary">
+                        Native
+                      </span>
                     </div>
-                  )}
-                </div>
+                    {renderModelOptions(
+                      CLAUDE_MODELS,
+                      (editingFeature.model ?? "opus") as AgentModel,
+                      (model) =>
+                        setEditingFeature({
+                          ...editingFeature,
+                          model,
+                          thinkingLevel: modelSupportsThinking(model)
+                            ? editingFeature.thinkingLevel
+                            : "none",
+                        }),
+                      "edit-model-select"
+                    )}
+
+                    {/* Thinking Level - Only shown when Claude model is selected */}
+                    {editModelAllowsThinking && (
+                      <div className="space-y-2 pt-2 border-t border-border">
+                        <Label className="flex items-center gap-2 text-sm">
+                          <Brain className="w-3.5 h-3.5 text-muted-foreground" />
+                          Thinking Level
+                        </Label>
+                        <div className="flex gap-2 flex-wrap">
+                          {(
+                            [
+                              "none",
+                              "low",
+                              "medium",
+                              "high",
+                              "ultrathink",
+                            ] as ThinkingLevel[]
+                          ).map((level) => (
+                            <button
+                              key={level}
+                              type="button"
+                              onClick={() => {
+                                setEditingFeature({
+                                  ...editingFeature,
+                                  thinkingLevel: level,
+                                });
+                                if (level === "ultrathink") {
+                                  toast.warning("Ultrathink Selected", {
+                                    description:
+                                      "Ultrathink uses extensive reasoning (45-180s, ~$0.48/task). Best for complex architecture, migrations, or debugging.",
+                                    duration: 5000,
+                                  });
+                                }
+                              }}
+                              className={cn(
+                                "flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors min-w-[60px]",
+                                (editingFeature.thinkingLevel ?? "none") ===
+                                  level
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background hover:bg-accent border-input"
+                              )}
+                              data-testid={`edit-thinking-level-${level}`}
+                            >
+                              {level === "none" && "None"}
+                              {level === "low" && "Low"}
+                              {level === "medium" && "Med"}
+                              {level === "high" && "High"}
+                              {level === "ultrathink" && "Ultra"}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Higher levels give more time to reason through complex
+                          problems.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Separator */}
-                {(!showProfilesOnly || showEditAdvancedOptions) && <div className="border-t border-border" />}
+                {(!showProfilesOnly || showEditAdvancedOptions) && (
+                  <div className="border-t border-border" />
+                )}
 
                 {/* Codex Models Section - Hidden when showProfilesOnly is true and showEditAdvancedOptions is false */}
                 {(!showProfilesOnly || showEditAdvancedOptions) && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-emerald-500" />
-                      OpenAI via Codex CLI
-                    </Label>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/50 text-emerald-600 dark:text-emerald-300">
-                      CLI
-                    </span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-emerald-500" />
+                        OpenAI via Codex CLI
+                      </Label>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/50 text-emerald-600 dark:text-emerald-300">
+                        CLI
+                      </span>
+                    </div>
+                    {renderModelOptions(
+                      CODEX_MODELS,
+                      (editingFeature.model ?? "opus") as AgentModel,
+                      (model) =>
+                        setEditingFeature({
+                          ...editingFeature,
+                          model,
+                          thinkingLevel: "none",
+                        }),
+                      "edit-model-select"
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Codex models do not support thinking levels.
+                    </p>
                   </div>
-                  {renderModelOptions(
-                    CODEX_MODELS,
-                    (editingFeature.model ?? "opus") as AgentModel,
-                    (model) =>
-                      setEditingFeature({
-                        ...editingFeature,
-                        model,
-                        thinkingLevel: "none",
-                      }),
-                    "edit-model-select"
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Codex models do not support thinking levels.
-                  </p>
-                </div>
                 )}
               </TabsContent>
 
               {/* Testing Tab */}
-              <TabsContent value="testing" className="space-y-4 overflow-y-auto">
+              <TabsContent
+                value="testing"
+                className="space-y-4 overflow-y-auto"
+              >
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="edit-skip-tests"

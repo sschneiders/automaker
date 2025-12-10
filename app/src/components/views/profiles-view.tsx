@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useAppStore, AIProfile, AgentModel, ThinkingLevel, ModelProvider } from "@/store/app-store";
+import {
+  useAppStore,
+  AIProfile,
+  AgentModel,
+  ThinkingLevel,
+  ModelProvider,
+} from "@/store/app-store";
 import { Button } from "@/components/ui/button";
 import { HotkeyButton } from "@/components/ui/hotkey-button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn, modelSupportsThinking } from "@/lib/utils";
 import {
   useKeyboardShortcuts,
-  ACTION_SHORTCUTS,
+  useKeyboardShortcutsConfig,
   KeyboardShortcut,
 } from "@/hooks/use-keyboard-shortcuts";
 import {
@@ -53,7 +59,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 // Icon mapping for profiles
-const PROFILE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+const PROFILE_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = {
   Brain,
   Zap,
   Scale,
@@ -446,8 +455,14 @@ function ProfileForm({
 }
 
 export function ProfilesView() {
-  const { aiProfiles, addAIProfile, updateAIProfile, removeAIProfile, reorderAIProfiles } =
-    useAppStore();
+  const {
+    aiProfiles,
+    addAIProfile,
+    updateAIProfile,
+    removeAIProfile,
+    reorderAIProfiles,
+  } = useAppStore();
+  const shortcuts = useKeyboardShortcutsConfig();
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingProfile, setEditingProfile] = useState<AIProfile | null>(null);
@@ -516,17 +531,17 @@ export function ProfilesView() {
 
   // Build keyboard shortcuts for profiles view
   const profilesShortcuts: KeyboardShortcut[] = useMemo(() => {
-    const shortcuts: KeyboardShortcut[] = [];
+    const shortcutsList: KeyboardShortcut[] = [];
 
     // Add profile shortcut - when in profiles view
-    shortcuts.push({
-      key: ACTION_SHORTCUTS.addProfile,
+    shortcutsList.push({
+      key: shortcuts.addProfile,
       action: () => setShowAddDialog(true),
       description: "Create new profile",
     });
 
-    return shortcuts;
-  }, []);
+    return shortcutsList;
+  }, [shortcuts]);
 
   // Register keyboard shortcuts for profiles view
   useKeyboardShortcuts(profilesShortcuts);
@@ -555,7 +570,7 @@ export function ProfilesView() {
             </div>
             <HotkeyButton
               onClick={() => setShowAddDialog(true)}
-              hotkey={ACTION_SHORTCUTS.addProfile}
+              hotkey={shortcuts.addProfile}
               hotkeyActive={false}
               data-testid="add-profile-button"
             >

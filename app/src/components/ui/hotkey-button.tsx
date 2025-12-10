@@ -203,8 +203,9 @@ export function HotkeyButton({
     (event: KeyboardEvent) => {
       if (!config || !hotkeyActive || disabled) return;
 
-      // Don't trigger when typing in inputs (unless explicitly scoped)
-      if (!scopeRef && isInputElement(document.activeElement)) {
+      // Don't trigger when typing in inputs (unless explicitly scoped or using cmdCtrl modifier)
+      // cmdCtrl shortcuts like Cmd+Enter should work even in inputs as they're intentional submit actions
+      if (!scopeRef && !config.cmdCtrl && isInputElement(document.activeElement)) {
         return;
       }
 

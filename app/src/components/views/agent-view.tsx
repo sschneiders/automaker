@@ -26,12 +26,13 @@ import { Markdown } from "@/components/ui/markdown";
 import type { ImageAttachment } from "@/store/app-store";
 import {
   useKeyboardShortcuts,
-  ACTION_SHORTCUTS,
+  useKeyboardShortcutsConfig,
   KeyboardShortcut,
 } from "@/hooks/use-keyboard-shortcuts";
 
 export function AgentView() {
   const { currentProject, setLastSelectedSession, getLastSelectedSession } = useAppStore();
+  const shortcuts = useKeyboardShortcutsConfig();
   const [input, setInput] = useState("");
   const [selectedImages, setSelectedImages] = useState<ImageAttachment[]>([]);
   const [showImageDropZone, setShowImageDropZone] = useState(false);
@@ -417,12 +418,12 @@ export function AgentView() {
 
   // Keyboard shortcuts for agent view
   const agentShortcuts: KeyboardShortcut[] = useMemo(() => {
-    const shortcuts: KeyboardShortcut[] = [];
+    const shortcutsList: KeyboardShortcut[] = [];
 
     // New session shortcut - only when in agent view with a project
     if (currentProject) {
-      shortcuts.push({
-        key: ACTION_SHORTCUTS.newSession,
+      shortcutsList.push({
+        key: shortcuts.newSession,
         action: () => {
           if (quickCreateSessionRef.current) {
             quickCreateSessionRef.current();
@@ -432,8 +433,8 @@ export function AgentView() {
       });
     }
 
-    return shortcuts;
-  }, [currentProject]);
+    return shortcutsList;
+  }, [currentProject, shortcuts]);
 
   // Register keyboard shortcuts
   useKeyboardShortcuts(agentShortcuts);
@@ -592,13 +593,16 @@ export function AgentView() {
                 <Card
                   className={cn(
                     "max-w-[80%]",
-                    message.role === "user" &&
-                      "bg-primary text-primary-foreground"
+                    message.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "border-l-4 border-primary bg-card"
                   )}
                 >
                   <CardContent className="p-3">
                     {message.role === "assistant" ? (
-                      <Markdown className="text-sm">{message.content}</Markdown>
+                      <Markdown className="text-sm text-primary prose-headings:text-primary prose-strong:text-primary prose-code:text-primary">
+                        {message.content}
+                      </Markdown>
                     ) : (
                       <p className="text-sm whitespace-pre-wrap">
                         {message.content}
@@ -609,7 +613,7 @@ export function AgentView() {
                         "text-xs mt-2",
                         message.role === "user"
                           ? "text-primary-foreground/70"
-                          : "text-muted-foreground"
+                          : "text-primary/70"
                       )}
                     >
                       {new Date(message.timestamp).toLocaleTimeString()}
@@ -624,11 +628,11 @@ export function AgentView() {
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
-                <Card>
+                <Card className="border-l-4 border-primary bg-card">
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      <span className="text-sm text-primary">
                         Thinking...
                       </span>
                     </div>

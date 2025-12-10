@@ -358,5 +358,38 @@
     "skipTests": true,
     "model": "opus",
     "thinkingLevel": "none"
+  },
+  {
+    "id": "feature-1765395197833-hkxty2nb9",
+    "category": "Uncategorized",
+    "description": "on the agent runner chat window, style the text to match the theme primary or secondary, restyle it to match the selected theme",
+    "steps": [],
+    "status": "waiting_approval",
+    "startedAt": "2025-12-10T19:33:18.742Z",
+    "imagePaths": [
+      {
+        "id": "img-1765395175327-vdj77vwtb",
+        "path": "/Users/webdevcody/Workspace/automaker/.automaker/images/1765395175325-plp2txel3_Screenshot_2025-12-10_at_2.32.52_PM.png",
+        "filename": "Screenshot 2025-12-10 at 2.32.52 PM.png",
+        "mimeType": "image/png"
+      }
+    ],
+    "skipTests": true,
+    "summary": "Styled agent chat messages to use theme primary colors. Modified: agent-view.tsx, interview-view.tsx. Assistant messages now have border-l-4 border-primary, text-primary for content and timestamps. Loading/thinking indicators also styled with theme colors.",
+    "model": "opus",
+    "thinkingLevel": "none"
+  },
+  {
+    "id": "feature-1765395217816-22cwdpnu9",
+    "category": "Uncategorized",
+    "description": "the add feature shortcut on the add new feature modal does not work anymore, please fix it",
+    "steps": [],
+    "status": "waiting_approval",
+    "startedAt": "2025-12-10T19:35:54.453Z",
+    "imagePaths": [],
+    "skipTests": true,
+    "summary": "Fixed Cmd+Enter shortcut not working in Add Feature modal when input is focused. Modified: hotkey-button.tsx - Changed logic to allow cmdCtrl modifier shortcuts even when typing in input fields, since they are intentional submit actions.",
+    "model": "opus",
+    "thinkingLevel": "none"
   }
 ]

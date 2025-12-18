@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   PointerSensor,
   useSensor,
@@ -9,7 +9,9 @@ import {
 } from "@dnd-kit/core";
 import { useAppStore, Feature } from "@/store/app-store";
 import { getElectronAPI } from "@/lib/electron";
+import type { AutoModeEvent } from "@/types/electron";
 import { pathsEqual } from "@/lib/utils";
+import { getBlockingDependencies } from "@/lib/dependency-resolver";
 import { BoardBackgroundModal } from "@/components/dialogs/board-background-modal";
 import { RefreshCw } from "lucide-react";
 import { useAutoMode } from "@/hooks/use-auto-mode";
@@ -24,11 +26,12 @@ import {
   AddFeatureDialog,
   AgentOutputModal,
   CompletedFeaturesModal,
-  DeleteAllVerifiedDialog,
+  ArchiveAllVerifiedDialog,
   DeleteCompletedFeatureDialog,
   EditFeatureDialog,
   FeatureSuggestionsDialog,
   FollowUpDialog,
+  PlanApprovalDialog,
 } from "./board-view/dialogs";
 import { CreateWorktreeDialog } from "./board-view/dialogs/create-worktree-dialog";
 import { DeleteWorktreeDialog } from "./board-view/dialogs/delete-worktree-dialog";
@@ -67,10 +70,17 @@ export function BoardView() {
     setKanbanCardDetailLevel,
     specCreatingForProject,
     setSpecCreatingForProject,
+    pendingPlanApproval,
+    setPendingPlanApproval,
+    updateFeature,
     getCurrentWorktree,
     setCurrentWorktree,
     getWorktrees,
     setWorktrees,
+    useWorktrees,
+    enableDependencyBlocking,
+    isPrimaryWorktreeBranch,
+    getPrimaryWorktreeBranch,
   } = useAppStore();
   const shortcuts = useKeyboardShortcutsConfig();
   const {
@@ -88,13 +98,15 @@ export function BoardView() {
   const [featuresWithContext, setFeaturesWithContext] = useState<Set<string>>(
     new Set()
   );
-  const [showDeleteAllVerifiedDialog, setShowDeleteAllVerifiedDialog] =
+  const [showArchiveAllVerifiedDialog, setShowArchiveAllVerifiedDialog] =
     useState(false);
   const [showBoardBackgroundModal, setShowBoardBackgroundModal] =
     useState(false);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [deleteCompletedFeature, setDeleteCompletedFeature] =
     useState<Feature | null>(null);
+  // State for viewing plan in read-only mode
+  const [viewPlanFeature, setViewPlanFeature] = useState<Feature | null>(null);
 
   // Worktree dialog states
   const [showCreateWorktreeDialog, setShowCreateWorktreeDialog] =
@@ -144,6 +156,8 @@ export function BoardView() {
   } = useSuggestionsState();
   // Search filter for Kanban cards
   const [searchQuery, setSearchQuery] = useState("");
+  // Plan approval loading state
+  const [isPlanApprovalLoading, setIsPlanApprovalLoading] = useState(false);
   // Derive spec creation state from store - check if current project is the one being created
   const isCreatingSpec = specCreatingForProject === currentProject?.path;
   const creatingSpecProjectPath = specCreatingForProject ?? undefined;
@@ -276,6 +290,27 @@ export function BoardView() {
   const { persistFeatureCreate, persistFeatureUpdate, persistFeatureDelete } =
     useBoardPersistence({ currentProject });
 
+  // Memoize the removed worktrees handler to prevent infinite loops
+  const handleRemovedWorktrees = useCallback(
+    (removedWorktrees: Array<{ path: string; branch: string }>) => {
+      // Reset features that were assigned to the removed worktrees (by branch)
+      hookFeatures.forEach((feature) => {
+        const matchesRemovedWorktree = removedWorktrees.some((removed) => {
+          // Match by branch name since worktreePath is no longer stored
+          return feature.branchName === removed.branch;
+        });
+
+        if (matchesRemovedWorktree) {
+          // Reset the feature's branch assignment
+          persistFeatureUpdate(feature.id, {
+            branchName: null as unknown as string | undefined,
+          });
+        }
+      });
+    },
+    [hookFeatures, persistFeatureUpdate]
+  );
+
   // Get in-progress features for keyboard shortcuts (needed before actions hook)
   const inProgressFeaturesForShortcuts = useMemo(() => {
     return hookFeatures.filter((f) => {
@@ -284,13 +319,12 @@ export function BoardView() {
     });
   }, [hookFeatures, runningAutoTasks]);
 
-  // Get current worktree info (path and branch) for filtering features
+  // Get current worktree info (path) for filtering features
   // This needs to be before useBoardActions so we can pass currentWorktreeBranch
   const currentWorktreeInfo = currentProject
     ? getCurrentWorktree(currentProject.path)
     : null;
   const currentWorktreePath = currentWorktreeInfo?.path ?? null;
-  const currentWorktreeBranch = currentWorktreeInfo?.branch ?? null;
   const worktreesByProject = useAppStore((s) => s.worktreesByProject);
   const worktrees = useMemo(
     () =>
@@ -300,8 +334,25 @@ export function BoardView() {
     [currentProject, worktreesByProject]
   );
 
+  // Get the branch for the currently selected worktree
+  // Find the worktree that matches the current selection, or use main worktree
+  const selectedWorktree = useMemo(() => {
+    if (currentWorktreePath === null) {
+      // Primary worktree selected - find the main worktree
+      return worktrees.find((w) => w.isMain);
+    } else {
+      // Specific worktree selected - find it by path
+      return worktrees.find(
+        (w) => !w.isMain && pathsEqual(w.path, currentWorktreePath)
+      );
+    }
+  }, [worktrees, currentWorktreePath]);
+
+  // Get the current branch from the selected worktree (not from store which may be stale)
+  const currentWorktreeBranch = selectedWorktree?.branch ?? null;
+
   // Get the branch for the currently selected worktree (for defaulting new features)
-  // Use the branch from currentWorktreeInfo, or fall back to main worktree's branch
+  // Use the branch from selectedWorktree, or fall back to main worktree's branch
   const selectedWorktreeBranch =
     currentWorktreeBranch || worktrees.find((w) => w.isMain)?.branch || "main";
 
@@ -325,7 +376,7 @@ export function BoardView() {
     handleOutputModalNumberKeyPress,
     handleForceStopFeature,
     handleStartNextFeatures,
-    handleDeleteAllVerified,
+    handleArchiveAllVerified,
   } = useBoardActions({
     currentProject,
     features: hookFeatures,
@@ -353,6 +404,205 @@ export function BoardView() {
     currentWorktreeBranch,
   });
 
+  // Client-side auto mode: periodically check for backlog items and move them to in-progress
+  // Use a ref to track the latest auto mode state so async operations always check the current value
+  const autoModeRunningRef = useRef(autoMode.isRunning);
+  useEffect(() => {
+    autoModeRunningRef.current = autoMode.isRunning;
+  }, [autoMode.isRunning]);
+
+  // Use a ref to track the latest features to avoid effect re-runs when features change
+  const hookFeaturesRef = useRef(hookFeatures);
+  useEffect(() => {
+    hookFeaturesRef.current = hookFeatures;
+  }, [hookFeatures]);
+
+  // Track features that are pending (started but not yet confirmed running)
+  const pendingFeaturesRef = useRef<Set<string>>(new Set());
+
+  // Listen to auto mode events to remove features from pending when they start running
+  useEffect(() => {
+    const api = getElectronAPI();
+    if (!api?.autoMode) return;
+
+    const unsubscribe = api.autoMode.onEvent((event: AutoModeEvent) => {
+      if (!currentProject) return;
+
+      // Only process events for the current project
+      const eventProjectPath =
+        "projectPath" in event ? event.projectPath : undefined;
+      if (eventProjectPath && eventProjectPath !== currentProject.path) {
+        return;
+      }
+
+      switch (event.type) {
+        case "auto_mode_feature_start":
+          // Feature is now confirmed running - remove from pending
+          if (event.featureId) {
+            pendingFeaturesRef.current.delete(event.featureId);
+          }
+          break;
+
+        case "auto_mode_feature_complete":
+        case "auto_mode_error":
+          // Feature completed or errored - remove from pending if still there
+          if (event.featureId) {
+            pendingFeaturesRef.current.delete(event.featureId);
+          }
+          break;
+      }
+    });
+
+    return unsubscribe;
+  }, [currentProject]);
+
+  useEffect(() => {
+    if (!autoMode.isRunning || !currentProject) {
+      return;
+    }
+
+    let isChecking = false;
+    let isActive = true; // Track if this effect is still active
+
+    const checkAndStartFeatures = async () => {
+      // Check if auto mode is still running and effect is still active
+      // Use ref to get the latest value, not the closure value
+      if (!isActive || !autoModeRunningRef.current || !currentProject) {
+        return;
+      }
+
+      // Prevent concurrent executions
+      if (isChecking) {
+        return;
+      }
+
+      isChecking = true;
+      try {
+        // Double-check auto mode is still running before proceeding
+        if (!isActive || !autoModeRunningRef.current || !currentProject) {
+          return;
+        }
+
+        // Count currently running tasks + pending features
+        const currentRunning =
+          runningAutoTasks.length + pendingFeaturesRef.current.size;
+        const availableSlots = maxConcurrency - currentRunning;
+
+        // No available slots, skip check
+        if (availableSlots <= 0) {
+          return;
+        }
+
+        // Filter backlog features by the currently selected worktree branch
+        // This logic mirrors use-board-column-features.ts for consistency
+        // Use ref to get the latest features without causing effect re-runs
+        const currentFeatures = hookFeaturesRef.current;
+        const backlogFeatures = currentFeatures.filter((f) => {
+          if (f.status !== "backlog") return false;
+
+          const featureBranch = f.branchName;
+
+          // Features without branchName are considered unassigned (show only on primary worktree)
+          if (!featureBranch) {
+            // No branch assigned - show only when viewing primary worktree
+            const isViewingPrimary = currentWorktreePath === null;
+            return isViewingPrimary;
+          }
+
+          if (currentWorktreeBranch === null) {
+            // We're viewing main but branch hasn't been initialized yet
+            // Show features assigned to primary worktree's branch
+            return currentProject.path
+              ? isPrimaryWorktreeBranch(currentProject.path, featureBranch)
+              : false;
+          }
+
+          // Match by branch name
+          return featureBranch === currentWorktreeBranch;
+        });
+
+        if (backlogFeatures.length === 0) {
+          return;
+        }
+
+        // Sort by priority (lower number = higher priority, priority 1 is highest)
+        const sortedBacklog = [...backlogFeatures].sort(
+          (a, b) => (a.priority || 999) - (b.priority || 999)
+        );
+
+        // Filter out features with blocking dependencies if dependency blocking is enabled
+        const eligibleFeatures = enableDependencyBlocking
+          ? sortedBacklog.filter((f) => {
+              const blockingDeps = getBlockingDependencies(f, currentFeatures);
+              return blockingDeps.length === 0;
+            })
+          : sortedBacklog;
+
+        // Start features up to available slots
+        const featuresToStart = eligibleFeatures.slice(0, availableSlots);
+
+        for (const feature of featuresToStart) {
+          // Check again before starting each feature
+          if (!isActive || !autoModeRunningRef.current || !currentProject) {
+            return;
+          }
+
+          // Simplified: No worktree creation on client - server derives workDir from feature.branchName
+          // If feature has no branchName and primary worktree is selected, assign primary branch
+          if (currentWorktreePath === null && !feature.branchName) {
+            const primaryBranch =
+              (currentProject.path
+                ? getPrimaryWorktreeBranch(currentProject.path)
+                : null) || "main";
+            await persistFeatureUpdate(feature.id, {
+              branchName: primaryBranch,
+            });
+          }
+
+          // Final check before starting implementation
+          if (!isActive || !autoModeRunningRef.current || !currentProject) {
+            return;
+          }
+
+          // Start the implementation - server will derive workDir from feature.branchName
+          const started = await handleStartImplementation(feature);
+
+          // If successfully started, track it as pending until we receive the start event
+          if (started) {
+            pendingFeaturesRef.current.add(feature.id);
+          }
+        }
+      } finally {
+        isChecking = false;
+      }
+    };
+
+    // Check immediately, then every 3 seconds
+    checkAndStartFeatures();
+    const interval = setInterval(checkAndStartFeatures, 3000);
+
+    return () => {
+      // Mark as inactive to prevent any pending async operations from continuing
+      isActive = false;
+      clearInterval(interval);
+      // Clear pending features when effect unmounts or dependencies change
+      pendingFeaturesRef.current.clear();
+    };
+  }, [
+    autoMode.isRunning,
+    currentProject,
+    runningAutoTasks,
+    maxConcurrency,
+    // hookFeatures is accessed via hookFeaturesRef to prevent effect re-runs
+    currentWorktreeBranch,
+    currentWorktreePath,
+    getPrimaryWorktreeBranch,
+    isPrimaryWorktreeBranch,
+    enableDependencyBlocking,
+    persistFeatureUpdate,
+    handleStartImplementation,
+  ]);
+
   // Use keyboard shortcuts hook (after actions hook)
   useBoardKeyboardShortcuts({
     features: hookFeatures,
@@ -369,8 +619,6 @@ export function BoardView() {
     runningAutoTasks,
     persistFeatureUpdate,
     handleStartImplementation,
-    projectPath: currentProject?.path || null,
-    onWorktreeCreated: () => setWorktreeRefreshKey((k) => k + 1),
   });
 
   // Use column features hook
@@ -387,6 +635,130 @@ export function BoardView() {
   const { backgroundSettings, backgroundImageStyle } = useBoardBackground({
     currentProject,
   });
+
+  // Find feature for pending plan approval
+  const pendingApprovalFeature = useMemo(() => {
+    if (!pendingPlanApproval) return null;
+    return hookFeatures.find((f) => f.id === pendingPlanApproval.featureId) || null;
+  }, [pendingPlanApproval, hookFeatures]);
+
+  // Handle plan approval
+  const handlePlanApprove = useCallback(
+    async (editedPlan?: string) => {
+      if (!pendingPlanApproval || !currentProject) return;
+
+      const featureId = pendingPlanApproval.featureId;
+      setIsPlanApprovalLoading(true);
+      try {
+        const api = getElectronAPI();
+        if (!api?.autoMode?.approvePlan) {
+          throw new Error("Plan approval API not available");
+        }
+
+        const result = await api.autoMode.approvePlan(
+          pendingPlanApproval.projectPath,
+          pendingPlanApproval.featureId,
+          true,
+          editedPlan
+        );
+
+        if (result.success) {
+          // Immediately update local feature state to hide "Approve Plan" button
+          // Get current feature to preserve version
+          const currentFeature = hookFeatures.find(f => f.id === featureId);
+          updateFeature(featureId, {
+            planSpec: {
+              status: 'approved',
+              content: editedPlan || pendingPlanApproval.planContent,
+              version: currentFeature?.planSpec?.version || 1,
+              approvedAt: new Date().toISOString(),
+              reviewedByUser: true,
+            },
+          });
+          // Reload features from server to ensure sync
+          loadFeatures();
+        } else {
+          console.error("[Board] Failed to approve plan:", result.error);
+        }
+      } catch (error) {
+        console.error("[Board] Error approving plan:", error);
+      } finally {
+        setIsPlanApprovalLoading(false);
+        setPendingPlanApproval(null);
+      }
+    },
+    [pendingPlanApproval, currentProject, setPendingPlanApproval, updateFeature, loadFeatures, hookFeatures]
+  );
+
+  // Handle plan rejection
+  const handlePlanReject = useCallback(
+    async (feedback?: string) => {
+      if (!pendingPlanApproval || !currentProject) return;
+
+      const featureId = pendingPlanApproval.featureId;
+      setIsPlanApprovalLoading(true);
+      try {
+        const api = getElectronAPI();
+        if (!api?.autoMode?.approvePlan) {
+          throw new Error("Plan approval API not available");
+        }
+
+        const result = await api.autoMode.approvePlan(
+          pendingPlanApproval.projectPath,
+          pendingPlanApproval.featureId,
+          false,
+          undefined,
+          feedback
+        );
+
+        if (result.success) {
+          // Immediately update local feature state
+          // Get current feature to preserve version
+          const currentFeature = hookFeatures.find(f => f.id === featureId);
+          updateFeature(featureId, {
+            status: 'backlog',
+            planSpec: {
+              status: 'rejected',
+              content: pendingPlanApproval.planContent,
+              version: currentFeature?.planSpec?.version || 1,
+              reviewedByUser: true,
+            },
+          });
+          // Reload features from server to ensure sync
+          loadFeatures();
+        } else {
+          console.error("[Board] Failed to reject plan:", result.error);
+        }
+      } catch (error) {
+        console.error("[Board] Error rejecting plan:", error);
+      } finally {
+        setIsPlanApprovalLoading(false);
+        setPendingPlanApproval(null);
+      }
+    },
+    [pendingPlanApproval, currentProject, setPendingPlanApproval, updateFeature, loadFeatures, hookFeatures]
+  );
+
+  // Handle opening approval dialog from feature card button
+  const handleOpenApprovalDialog = useCallback(
+    (feature: Feature) => {
+      if (!feature.planSpec?.content || !currentProject) return;
+
+      // Determine the planning mode for approval (skip should never have a plan requiring approval)
+      const mode = feature.planningMode;
+      const approvalMode: "lite" | "spec" | "full" =
+        mode === 'lite' || mode === 'spec' || mode === 'full' ? mode : 'spec';
+
+      // Re-open the approval dialog with the feature's plan data
+      setPendingPlanApproval({
+        featureId: feature.id,
+        projectPath: currentProject.path,
+        planContent: feature.planSpec.content,
+        planningMode: approvalMode,
+      });
+    },
+    [currentProject, setPendingPlanApproval]
+  );
 
   if (!currentProject) {
     return (
@@ -421,8 +793,13 @@ export function BoardView() {
         maxConcurrency={maxConcurrency}
         onConcurrencyChange={setMaxConcurrency}
         isAutoModeRunning={autoMode.isRunning}
-        onStartAutoMode={() => autoMode.start()}
-        onStopAutoMode={() => autoMode.stop()}
+        onAutoModeToggle={(enabled) => {
+          if (enabled) {
+            autoMode.start();
+          } else {
+            autoMode.stop();
+          }
+        }}
         onAddFeature={() => setShowAddDialog(true)}
         addFeatureShortcut={{
           key: shortcuts.addFeature,
@@ -453,10 +830,10 @@ export function BoardView() {
           setSelectedWorktreeForAction(worktree);
           setShowCreateBranchDialog(true);
         }}
+        onRemovedWorktrees={handleRemovedWorktrees}
         runningFeatureIds={runningAutoTasks}
         features={hookFeatures.map((f) => ({
           id: f.id,
-          worktreePath: f.worktreePath,
           branchName: f.branchName,
         }))}
       />
@@ -505,13 +882,15 @@ export function BoardView() {
           onCommit={handleCommitFeature}
           onComplete={handleCompleteFeature}
           onImplement={handleStartImplementation}
+          onViewPlan={(feature) => setViewPlanFeature(feature)}
+          onApprovePlan={handleOpenApprovalDialog}
           featuresWithContext={featuresWithContext}
           runningAutoTasks={runningAutoTasks}
           shortcuts={shortcuts}
           onStartNextFeatures={handleStartNextFeatures}
           onShowSuggestions={() => setShowSuggestionsDialog(true)}
           suggestionsCount={suggestionsCount}
-          onDeleteAllVerified={() => setShowDeleteAllVerifiedDialog(true)}
+          onArchiveAllVerified={() => setShowArchiveAllVerifiedDialog(true)}
         />
       </div>
 
@@ -551,6 +930,7 @@ export function BoardView() {
         branchSuggestions={branchSuggestions}
         defaultSkipTests={defaultSkipTests}
         defaultBranch={selectedWorktreeBranch}
+        currentBranch={currentWorktreeBranch || undefined}
         isMaximized={isMaximized}
         showProfilesOnly={showProfilesOnly}
         aiProfiles={aiProfiles}
@@ -563,6 +943,7 @@ export function BoardView() {
         onUpdate={handleUpdateFeature}
         categorySuggestions={categorySuggestions}
         branchSuggestions={branchSuggestions}
+        currentBranch={currentWorktreeBranch || undefined}
         isMaximized={isMaximized}
         showProfilesOnly={showProfilesOnly}
         aiProfiles={aiProfiles}
@@ -579,14 +960,14 @@ export function BoardView() {
         onNumberKeyPress={handleOutputModalNumberKeyPress}
       />
 
-      {/* Delete All Verified Dialog */}
-      <DeleteAllVerifiedDialog
-        open={showDeleteAllVerifiedDialog}
-        onOpenChange={setShowDeleteAllVerifiedDialog}
+      {/* Archive All Verified Dialog */}
+      <ArchiveAllVerifiedDialog
+        open={showArchiveAllVerifiedDialog}
+        onOpenChange={setShowArchiveAllVerifiedDialog}
         verifiedCount={getColumnFeatures("verified").length}
         onConfirm={async () => {
-          await handleDeleteAllVerified();
-          setShowDeleteAllVerifiedDialog(false);
+          await handleArchiveAllVerified();
+          setShowArchiveAllVerifiedDialog(false);
         }}
       />
 
@@ -615,6 +996,34 @@ export function BoardView() {
         isGenerating={isGeneratingSuggestions}
         setIsGenerating={setIsGeneratingSuggestions}
       />
+
+      {/* Plan Approval Dialog */}
+      <PlanApprovalDialog
+        open={pendingPlanApproval !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingPlanApproval(null);
+          }
+        }}
+        feature={pendingApprovalFeature}
+        planContent={pendingPlanApproval?.planContent || ""}
+        onApprove={handlePlanApprove}
+        onReject={handlePlanReject}
+        isLoading={isPlanApprovalLoading}
+      />
+
+      {/* View Plan Dialog (read-only) */}
+      {viewPlanFeature && viewPlanFeature.planSpec?.content && (
+        <PlanApprovalDialog
+          open={true}
+          onOpenChange={(open) => !open && setViewPlanFeature(null)}
+          feature={viewPlanFeature}
+          planContent={viewPlanFeature.planSpec.content}
+          onApprove={() => setViewPlanFeature(null)}
+          onReject={() => setViewPlanFeature(null)}
+          viewOnly={true}
+        />
+      )}
 
       {/* Create Worktree Dialog */}
       <CreateWorktreeDialog
@@ -656,19 +1065,13 @@ export function BoardView() {
         projectPath={currentProject.path}
         worktree={selectedWorktreeForAction}
         onDeleted={(deletedWorktree, _deletedBranch) => {
-          // Reset features that were assigned to the deleted worktree
+          // Reset features that were assigned to the deleted worktree (by branch)
           hookFeatures.forEach((feature) => {
-            const matchesByPath =
-              feature.worktreePath &&
-              pathsEqual(feature.worktreePath, deletedWorktree.path);
-            const matchesByBranch =
-              feature.branchName === deletedWorktree.branch;
-
-            if (matchesByPath || matchesByBranch) {
-              // Reset the feature's worktree assignment
+            // Match by branch name since worktreePath is no longer stored
+            if (feature.branchName === deletedWorktree.branch) {
+              // Reset the feature's branch assignment
               persistFeatureUpdate(feature.id, {
                 branchName: null as unknown as string | undefined,
-                worktreePath: null as unknown as string | undefined,
               });
             }
           });

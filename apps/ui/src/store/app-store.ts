@@ -263,6 +263,9 @@ export type ModelProvider = "claude";
 // Thinking level (budget_tokens) options
 export type ThinkingLevel = "none" | "low" | "medium" | "high" | "ultrathink";
 
+// Planning mode for feature specifications
+export type PlanningMode = 'skip' | 'lite' | 'spec' | 'full';
+
 // AI Provider Profile - user-defined presets for model configurations
 export interface AIProfile {
   id: string;
@@ -296,10 +299,35 @@ export interface Feature {
   error?: string; // Error message if the agent errored during processing
   priority?: number; // Priority: 1 = high, 2 = medium, 3 = low
   dependencies?: string[]; // Array of feature IDs this feature depends on
-  // Worktree info - set when a feature is being worked on in an isolated git worktree
-  worktreePath?: string; // Path to the worktree directory
-  branchName?: string; // Name of the feature branch
+  // Branch info - worktree path is derived at runtime from branchName
+  branchName?: string; // Name of the feature branch (undefined = use current worktree)
   justFinishedAt?: string; // ISO timestamp when agent just finished and moved to waiting_approval (shows badge for 2 minutes)
+  planningMode?: PlanningMode; // Planning mode for this feature
+  planSpec?: PlanSpec; // Generated spec/plan data
+  requirePlanApproval?: boolean; // Whether to pause and require manual approval before implementation
+}
+
+// Parsed task from spec (for spec and full planning modes)
+export interface ParsedTask {
+  id: string;          // e.g., "T001"
+  description: string; // e.g., "Create user model"
+  filePath?: string;   // e.g., "src/models/user.ts"
+  phase?: string;      // e.g., "Phase 1: Foundation" (for full mode)
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+}
+
+// PlanSpec status for feature planning/specification
+export interface PlanSpec {
+  status: 'pending' | 'generating' | 'generated' | 'approved' | 'rejected';
+  content?: string; // The actual spec/plan markdown content
+  version: number;
+  generatedAt?: string; // ISO timestamp
+  approvedAt?: string; // ISO timestamp
+  reviewedByUser: boolean; // True if user has seen the spec
+  tasksCompleted?: number;
+  tasksTotal?: number;
+  currentTaskId?: string; // ID of the task currently being worked on
+  tasks?: ParsedTask[];   // Parsed tasks from the spec
 }
 
 // File tree node for project analysis
@@ -404,7 +432,10 @@ export interface AppState {
 
   // User-managed Worktrees (per-project)
   // projectPath -> { path: worktreePath or null for main, branch: branch name }
-  currentWorktreeByProject: Record<string, { path: string | null; branch: string }>;
+  currentWorktreeByProject: Record<
+    string,
+    { path: string | null; branch: string }
+  >;
   worktreesByProject: Record<
     string,
     Array<{
@@ -460,6 +491,18 @@ export interface AppState {
   // Spec Creation State (per-project, keyed by project path)
   // Tracks which project is currently having its spec generated
   specCreatingForProject: string | null;
+
+  defaultPlanningMode: PlanningMode;
+  defaultRequirePlanApproval: boolean;
+
+  // Plan Approval State
+  // When a plan requires user approval, this holds the pending approval details
+  pendingPlanApproval: {
+    featureId: string;
+    projectPath: string;
+    planContent: string;
+    planningMode: "lite" | "spec" | "full";
+  } | null;
 }
 
 // Default background settings for board backgrounds
@@ -588,7 +631,11 @@ export interface AppActions {
 
   // Worktree Settings actions
   setUseWorktrees: (enabled: boolean) => void;
-  setCurrentWorktree: (projectPath: string, worktreePath: string | null, branch: string) => void;
+  setCurrentWorktree: (
+    projectPath: string,
+    worktreePath: string | null,
+    branch: string
+  ) => void;
   setWorktrees: (
     projectPath: string,
     worktrees: Array<{
@@ -599,7 +646,9 @@ export interface AppActions {
       changedFilesCount?: number;
     }>
   ) => void;
-  getCurrentWorktree: (projectPath: string) => { path: string | null; branch: string } | null;
+  getCurrentWorktree: (
+    projectPath: string
+  ) => { path: string | null; branch: string } | null;
   getWorktrees: (projectPath: string) => Array<{
     path: string;
     branch: string;
@@ -607,6 +656,8 @@ export interface AppActions {
     hasChanges?: boolean;
     changedFilesCount?: number;
   }>;
+  isPrimaryWorktreeBranch: (projectPath: string, branchName: string) => boolean;
+  getPrimaryWorktreeBranch: (projectPath: string) => string | null;
 
   // Profile Display Settings actions
   setShowProfilesOnly: (enabled: boolean) => void;
@@ -688,6 +739,17 @@ export interface AppActions {
   // Spec Creation actions
   setSpecCreatingForProject: (projectPath: string | null) => void;
   isSpecCreatingForProject: (projectPath: string) => boolean;
+
+  setDefaultPlanningMode: (mode: PlanningMode) => void;
+  setDefaultRequirePlanApproval: (require: boolean) => void;
+
+  // Plan Approval actions
+  setPendingPlanApproval: (approval: {
+    featureId: string;
+    projectPath: string;
+    planContent: string;
+    planningMode: "lite" | "spec" | "full";
+  } | null) => void;
 
   // Reset
   reset: () => void;
@@ -777,6 +839,9 @@ const initialState: AppState = {
     defaultFontSize: 14,
   },
   specCreatingForProject: null,
+  defaultPlanningMode: 'skip' as PlanningMode,
+  defaultRequirePlanApproval: false,
+  pendingPlanApproval: null,
 };
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -1347,7 +1412,8 @@ export const useAppStore = create<AppState & AppActions>()(
 
       // Feature Default Settings actions
       setDefaultSkipTests: (skip) => set({ defaultSkipTests: skip }),
-      setEnableDependencyBlocking: (enabled) => set({ enableDependencyBlocking: enabled }),
+      setEnableDependencyBlocking: (enabled) =>
+        set({ enableDependencyBlocking: enabled }),
 
       // Worktree Settings actions
       setUseWorktrees: (enabled) => set({ useWorktrees: enabled }),
@@ -1378,6 +1444,18 @@ export const useAppStore = create<AppState & AppActions>()(
 
       getWorktrees: (projectPath) => {
         return get().worktreesByProject[projectPath] ?? [];
+      },
+
+      isPrimaryWorktreeBranch: (projectPath, branchName) => {
+        const worktrees = get().worktreesByProject[projectPath] ?? [];
+        const primary = worktrees.find((w) => w.isMain);
+        return primary?.branch === branchName;
+      },
+
+      getPrimaryWorktreeBranch: (projectPath) => {
+        const worktrees = get().worktreesByProject[projectPath] ?? [];
+        const primary = worktrees.find((w) => w.isMain);
+        return primary?.branch ?? null;
       },
 
       // Profile Display Settings actions
@@ -2185,6 +2263,12 @@ export const useAppStore = create<AppState & AppActions>()(
         return get().specCreatingForProject === projectPath;
       },
 
+      setDefaultPlanningMode: (mode) => set({ defaultPlanningMode: mode }),
+      setDefaultRequirePlanApproval: (require) => set({ defaultRequirePlanApproval: require }),
+
+      // Plan Approval actions
+      setPendingPlanApproval: (approval) => set({ pendingPlanApproval: approval }),
+
       // Reset
       reset: () => set(initialState),
     }),
@@ -2237,7 +2321,8 @@ export const useAppStore = create<AppState & AppActions>()(
         // Settings
         apiKeys: state.apiKeys,
         maxConcurrency: state.maxConcurrency,
-        autoModeByProject: state.autoModeByProject,
+        // Note: autoModeByProject is intentionally NOT persisted
+        // Auto-mode should always default to OFF on app refresh
         defaultSkipTests: state.defaultSkipTests,
         enableDependencyBlocking: state.enableDependencyBlocking,
         useWorktrees: state.useWorktrees,
@@ -2253,6 +2338,8 @@ export const useAppStore = create<AppState & AppActions>()(
         lastSelectedSessionByProject: state.lastSelectedSessionByProject,
         // Board background settings
         boardBackgroundByProject: state.boardBackgroundByProject,
+        defaultPlanningMode: state.defaultPlanningMode,
+        defaultRequirePlanApproval: state.defaultRequirePlanApproval,
       }),
     }
   )

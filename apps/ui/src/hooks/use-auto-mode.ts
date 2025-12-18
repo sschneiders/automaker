@@ -4,6 +4,11 @@ import { useAppStore } from "@/store/app-store";
 import { getElectronAPI } from "@/lib/electron";
 import type { AutoModeEvent } from "@/types/electron";
 
+// Type guard for plan_approval_required event
+function isPlanApprovalEvent(event: AutoModeEvent): event is Extract<AutoModeEvent, { type: "plan_approval_required" }> {
+  return event.type === "plan_approval_required";
+}
+
 /**
  * Hook for managing auto mode (scoped per project)
  */
@@ -13,22 +18,22 @@ export function useAutoMode() {
     setAutoModeRunning,
     addRunningTask,
     removeRunningTask,
-    clearRunningTasks,
     currentProject,
     addAutoModeActivity,
     maxConcurrency,
     projects,
+    setPendingPlanApproval,
   } = useAppStore(
     useShallow((state) => ({
       autoModeByProject: state.autoModeByProject,
       setAutoModeRunning: state.setAutoModeRunning,
       addRunningTask: state.addRunningTask,
       removeRunningTask: state.removeRunningTask,
-      clearRunningTasks: state.clearRunningTasks,
       currentProject: state.currentProject,
       addAutoModeActivity: state.addAutoModeActivity,
       maxConcurrency: state.maxConcurrency,
       projects: state.projects,
+      setPendingPlanApproval: state.setPendingPlanApproval,
     }))
   );
 
@@ -119,36 +124,22 @@ export function useAutoMode() {
           }
           break;
 
-        case "auto_mode_stopped":
-          // Auto mode was explicitly stopped (by user or error)
-          setAutoModeRunning(eventProjectId, false);
-          clearRunningTasks(eventProjectId);
-          console.log("[AutoMode] Auto mode stopped");
-          break;
-
-        case "auto_mode_started":
-          // Auto mode started - ensure UI reflects running state
-          console.log("[AutoMode] Auto mode started:", event.message);
-          break;
-
-        case "auto_mode_idle":
-          // Auto mode is running but has no pending features to pick up
-          // This is NOT a stop - auto mode keeps running and will pick up new features
-          console.log("[AutoMode] Auto mode idle - waiting for new features");
-          break;
-
-        case "auto_mode_complete":
-          // Legacy event - only handle if it looks like a stop (for backwards compatibility)
-          if (event.message === "Auto mode stopped") {
-            setAutoModeRunning(eventProjectId, false);
-            clearRunningTasks(eventProjectId);
-            console.log("[AutoMode] Auto mode stopped (legacy event)");
-          }
-          break;
-
         case "auto_mode_error":
-          console.error("[AutoMode Error]", event.error);
           if (event.featureId && event.error) {
+            // Check if this is a user-initiated cancellation or abort (not a real error)
+            if (event.errorType === "cancellation" || event.errorType === "abort") {
+              // User cancelled/aborted the feature - just log as info, not an error
+              console.log("[AutoMode] Feature cancelled/aborted:", event.error);
+              // Remove from running tasks
+              if (eventProjectId) {
+                removeRunningTask(eventProjectId, event.featureId);
+              }
+              break;
+            }
+
+            // Real error - log and show to user
+            console.error("[AutoMode Error]", event.error);
+
             // Check for authentication errors and provide a more helpful message
             const isAuthError =
               event.errorType === "authentication" ||
@@ -210,6 +201,124 @@ export function useAutoMode() {
             });
           }
           break;
+
+        case "plan_approval_required":
+          // Plan requires user approval before proceeding
+          if (isPlanApprovalEvent(event)) {
+            console.log(
+              `[AutoMode] Plan approval required for ${event.featureId}`
+            );
+            setPendingPlanApproval({
+              featureId: event.featureId,
+              projectPath: event.projectPath || currentProject?.path || "",
+              planContent: event.planContent,
+              planningMode: event.planningMode,
+            });
+          }
+          break;
+
+        case "planning_started":
+          // Log when planning phase begins
+          if (event.featureId && event.mode && event.message) {
+            console.log(
+              `[AutoMode] Planning started (${event.mode}) for ${event.featureId}`
+            );
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "planning",
+              message: event.message,
+              phase: "planning",
+            });
+          }
+          break;
+
+        case "plan_approved":
+          // Log when plan is approved by user
+          if (event.featureId) {
+            console.log(`[AutoMode] Plan approved for ${event.featureId}`);
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "action",
+              message: event.hasEdits
+                ? "Plan approved with edits, starting implementation..."
+                : "Plan approved, starting implementation...",
+              phase: "action",
+            });
+          }
+          break;
+
+        case "plan_auto_approved":
+          // Log when plan is auto-approved (requirePlanApproval=false)
+          if (event.featureId) {
+            console.log(`[AutoMode] Plan auto-approved for ${event.featureId}`);
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "action",
+              message: "Plan auto-approved, starting implementation...",
+              phase: "action",
+            });
+          }
+          break;
+
+        case "plan_revision_requested":
+          // Log when user requests plan revision with feedback
+          if (event.featureId) {
+            const revisionEvent = event as Extract<AutoModeEvent, { type: "plan_revision_requested" }>;
+            console.log(`[AutoMode] Plan revision requested for ${event.featureId} (v${revisionEvent.planVersion})`);
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "planning",
+              message: `Revising plan based on feedback (v${revisionEvent.planVersion})...`,
+              phase: "planning",
+            });
+          }
+          break;
+
+        case "auto_mode_task_started":
+          // Task started - show which task is being worked on
+          if (event.featureId && "taskId" in event && "taskDescription" in event) {
+            const taskEvent = event as Extract<AutoModeEvent, { type: "auto_mode_task_started" }>;
+            console.log(
+              `[AutoMode] Task ${taskEvent.taskId} started for ${event.featureId}: ${taskEvent.taskDescription}`
+            );
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "progress",
+              message: `▶ Starting ${taskEvent.taskId}: ${taskEvent.taskDescription}`,
+            });
+          }
+          break;
+
+        case "auto_mode_task_complete":
+          // Task completed - show progress
+          if (event.featureId && "taskId" in event) {
+            const taskEvent = event as Extract<AutoModeEvent, { type: "auto_mode_task_complete" }>;
+            console.log(
+              `[AutoMode] Task ${taskEvent.taskId} completed for ${event.featureId} (${taskEvent.tasksCompleted}/${taskEvent.tasksTotal})`
+            );
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "progress",
+              message: `✓ ${taskEvent.taskId} done (${taskEvent.tasksCompleted}/${taskEvent.tasksTotal})`,
+            });
+          }
+          break;
+
+        case "auto_mode_phase_complete":
+          // Phase completed (for full mode with phased tasks)
+          if (event.featureId && "phaseNumber" in event) {
+            const phaseEvent = event as Extract<AutoModeEvent, { type: "auto_mode_phase_complete" }>;
+            console.log(
+              `[AutoMode] Phase ${phaseEvent.phaseNumber} completed for ${event.featureId}`
+            );
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "action",
+              message: `Phase ${phaseEvent.phaseNumber} completed`,
+              phase: "action",
+            });
+          }
+          break;
       }
     });
 
@@ -218,128 +327,36 @@ export function useAutoMode() {
     projectId,
     addRunningTask,
     removeRunningTask,
-    clearRunningTasks,
-    setAutoModeRunning,
     addAutoModeActivity,
     getProjectIdFromPath,
+    setPendingPlanApproval,
+    currentProject?.path,
   ]);
 
-  // Restore auto mode for all projects that were running when app was closed
-  // This runs once on mount to restart auto loops for persisted running states
-  useEffect(() => {
-    const api = getElectronAPI();
-    if (!api?.autoMode) return;
-
-    // Find all projects that have auto mode marked as running
-    const projectsToRestart: Array<{ projectId: string; projectPath: string }> =
-      [];
-    for (const [projectId, state] of Object.entries(autoModeByProject)) {
-      if (state.isRunning) {
-        // Find the project path for this project ID
-        const project = projects.find((p) => p.id === projectId);
-        if (project) {
-          projectsToRestart.push({ projectId, projectPath: project.path });
-        }
-      }
-    }
-
-    // Restart auto mode for each project
-    for (const { projectId, projectPath } of projectsToRestart) {
-      console.log(`[AutoMode] Restoring auto mode for project: ${projectPath}`);
-      api.autoMode
-        .start(projectPath, maxConcurrency)
-        .then((result) => {
-          if (!result.success) {
-            console.error(
-              `[AutoMode] Failed to restore auto mode for ${projectPath}:`,
-              result.error
-            );
-            // Mark as not running if we couldn't restart
-            setAutoModeRunning(projectId, false);
-          } else {
-            console.log(`[AutoMode] Restored auto mode for ${projectPath}`);
-          }
-        })
-        .catch((error) => {
-          console.error(
-            `[AutoMode] Error restoring auto mode for ${projectPath}:`,
-            error
-          );
-          setAutoModeRunning(projectId, false);
-        });
-    }
-    // Only run once on mount - intentionally empty dependency array
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Start auto mode
-  const start = useCallback(async () => {
+  // Start auto mode - UI only, feature pickup is handled in board-view.tsx
+  const start = useCallback(() => {
     if (!currentProject) {
       console.error("No project selected");
       return;
     }
 
-    try {
-      const api = getElectronAPI();
-      if (!api?.autoMode) {
-        throw new Error("Auto mode API not available");
-      }
-
-      const result = await api.autoMode.start(
-        currentProject.path,
-        maxConcurrency
-      );
-
-      if (result.success) {
-        setAutoModeRunning(currentProject.id, true);
-        console.log(
-          `[AutoMode] Started successfully with maxConcurrency: ${maxConcurrency}`
-        );
-      } else {
-        console.error("[AutoMode] Failed to start:", result.error);
-        throw new Error(result.error || "Failed to start auto mode");
-      }
-    } catch (error) {
-      console.error("[AutoMode] Error starting:", error);
-      if (currentProject) {
-        setAutoModeRunning(currentProject.id, false);
-      }
-      throw error;
-    }
+    setAutoModeRunning(currentProject.id, true);
+    console.log(`[AutoMode] Started with maxConcurrency: ${maxConcurrency}`);
   }, [currentProject, setAutoModeRunning, maxConcurrency]);
 
-  // Stop auto mode - only turns off the toggle, running tasks continue
-  const stop = useCallback(async () => {
+  // Stop auto mode - UI only, running tasks continue until natural completion
+  const stop = useCallback(() => {
     if (!currentProject) {
       console.error("No project selected");
       return;
     }
 
-    try {
-      const api = getElectronAPI();
-      if (!api?.autoMode) {
-        throw new Error("Auto mode API not available");
-      }
-
-      const result = await api.autoMode.stop(currentProject.path);
-
-      if (result.success) {
-        setAutoModeRunning(currentProject.id, false);
-        // NOTE: We intentionally do NOT clear running tasks here.
-        // Stopping auto mode only turns off the toggle to prevent new features
-        // from being picked up. Running tasks will complete naturally and be
-        // removed via the auto_mode_feature_complete event.
-        console.log(
-          "[AutoMode] Stopped successfully - running tasks will continue"
-        );
-      } else {
-        console.error("[AutoMode] Failed to stop:", result.error);
-        throw new Error(result.error || "Failed to stop auto mode");
-      }
-    } catch (error) {
-      console.error("[AutoMode] Error stopping:", error);
-      throw error;
-    }
+    setAutoModeRunning(currentProject.id, false);
+    // NOTE: We intentionally do NOT clear running tasks here.
+    // Stopping auto mode only turns off the toggle to prevent new features
+    // from being picked up. Running tasks will complete naturally and be
+    // removed via the auto_mode_feature_complete event.
+    console.log("[AutoMode] Stopped - running tasks will continue");
   }, [currentProject, setAutoModeRunning]);
 
   // Stop a specific feature

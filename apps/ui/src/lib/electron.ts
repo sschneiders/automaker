@@ -83,7 +83,6 @@ export interface RunningAgentsResult {
   success: boolean;
   runningAgents?: RunningAgent[];
   totalCount?: number;
-  autoLoopRunning?: boolean;
   error?: string;
 }
 
@@ -220,7 +219,6 @@ export interface AutoModeAPI {
   status: (projectPath?: string) => Promise<{
     success: boolean;
     isRunning?: boolean;
-    autoLoopRunning?: boolean; // Backend uses this name instead of isRunning
     currentFeatureId?: string | null;
     runningFeatures?: string[];
     runningProjects?: string[];
@@ -260,6 +258,13 @@ export interface AutoModeAPI {
     projectPath: string,
     featureId: string,
     worktreePath?: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  approvePlan: (
+    projectPath: string,
+    featureId: string,
+    approved: boolean,
+    editedPlan?: string,
+    feedback?: string
   ) => Promise<{ success: boolean; error?: string }>;
   onEvent: (callback: (event: AutoModeEvent) => void) => () => void;
 }
@@ -1444,7 +1449,6 @@ function createMockAutoModeAPI(): AutoModeAPI {
       return {
         success: true,
         isRunning: mockAutoModeRunning,
-        autoLoopRunning: mockAutoModeRunning,
         currentFeatureId: mockAutoModeRunning ? "feature-0" : null,
         runningFeatures: Array.from(mockRunningFeatures),
         runningCount: mockRunningFeatures.size,
@@ -1695,6 +1699,23 @@ function createMockAutoModeAPI(): AutoModeAPI {
         message: "Changes committed successfully",
       });
 
+      return { success: true };
+    },
+
+    approvePlan: async (
+      projectPath: string,
+      featureId: string,
+      approved: boolean,
+      editedPlan?: string,
+      feedback?: string
+    ) => {
+      console.log("[Mock] Plan approval:", {
+        projectPath,
+        featureId,
+        approved,
+        editedPlan: editedPlan ? "[edited]" : undefined,
+        feedback,
+      });
       return { success: true };
     },
 
@@ -2595,7 +2616,6 @@ function createMockRunningAgentsAPI(): RunningAgentsAPI {
         success: true,
         runningAgents,
         totalCount: runningAgents.length,
-        autoLoopRunning: mockAutoModeRunning,
       };
     },
   };

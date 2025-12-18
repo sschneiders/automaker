@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { HotkeyButton } from "@/components/ui/hotkey-button";
 import { Label } from "@/components/ui/label";
 import { CategoryAutocomplete } from "@/components/ui/category-autocomplete";
-import { BranchAutocomplete } from "@/components/ui/branch-autocomplete";
 import {
   DescriptionImageDropZone,
   FeatureImagePath as DescriptionImagePath,
@@ -22,6 +21,7 @@ import {
 import {
   MessageSquare,
   Settings2,
+  SlidersHorizontal,
   FlaskConical,
   Sparkles,
   ChevronDown,
@@ -35,6 +35,7 @@ import {
   ThinkingLevel,
   FeatureImage,
   AIProfile,
+  PlanningMode,
 } from "@/store/app-store";
 import {
   ModelSelector,
@@ -42,6 +43,8 @@ import {
   ProfileQuickSelect,
   TestingTabContent,
   PrioritySelector,
+  BranchSelector,
+  PlanningModeSelector,
 } from "../shared";
 import {
   DropdownMenu,
@@ -63,13 +66,16 @@ interface AddFeatureDialogProps {
     skipTests: boolean;
     model: AgentModel;
     thinkingLevel: ThinkingLevel;
-    branchName: string;
+    branchName: string; // Can be empty string to use current branch
     priority: number;
+    planningMode: PlanningMode;
+    requirePlanApproval: boolean;
   }) => void;
   categorySuggestions: string[];
   branchSuggestions: string[];
   defaultSkipTests: boolean;
   defaultBranch?: string;
+  currentBranch?: string;
   isMaximized: boolean;
   showProfilesOnly: boolean;
   aiProfiles: AIProfile[];
@@ -83,11 +89,13 @@ export function AddFeatureDialog({
   branchSuggestions,
   defaultSkipTests,
   defaultBranch = "main",
+  currentBranch,
   isMaximized,
   showProfilesOnly,
   aiProfiles,
 }: AddFeatureDialogProps) {
   const navigate = useNavigate();
+  const [useCurrentBranch, setUseCurrentBranch] = useState(true);
   const [newFeature, setNewFeature] = useState({
     category: "",
     description: "",
@@ -97,7 +105,7 @@ export function AddFeatureDialog({
     skipTests: false,
     model: "opus" as AgentModel,
     thinkingLevel: "none" as ThinkingLevel,
-    branchName: "main",
+    branchName: "",
     priority: 2 as number, // Default to medium priority
   });
   const [newFeaturePreviewMap, setNewFeaturePreviewMap] =
@@ -108,9 +116,11 @@ export function AddFeatureDialog({
   const [enhancementMode, setEnhancementMode] = useState<
     "improve" | "technical" | "simplify" | "acceptance"
   >("improve");
+  const [planningMode, setPlanningMode] = useState<PlanningMode>('skip');
+  const [requirePlanApproval, setRequirePlanApproval] = useState(false);
 
-  // Get enhancement model and worktrees setting from store
-  const { enhancementModel, useWorktrees } = useAppStore();
+  // Get enhancement model, planning mode defaults, and worktrees setting from store
+  const { enhancementModel, defaultPlanningMode, defaultRequirePlanApproval, useWorktrees } = useAppStore();
 
   // Sync defaults when dialog opens
   useEffect(() => {
@@ -118,14 +128,23 @@ export function AddFeatureDialog({
       setNewFeature((prev) => ({
         ...prev,
         skipTests: defaultSkipTests,
-        branchName: defaultBranch,
+        branchName: defaultBranch || "",
       }));
+      setUseCurrentBranch(true);
+      setPlanningMode(defaultPlanningMode);
+      setRequirePlanApproval(defaultRequirePlanApproval);
     }
-  }, [open, defaultSkipTests, defaultBranch]);
+  }, [open, defaultSkipTests, defaultBranch, defaultPlanningMode, defaultRequirePlanApproval]);
 
   const handleAdd = () => {
     if (!newFeature.description.trim()) {
       setDescriptionError(true);
+      return;
+    }
+
+    // Validate branch selection when "other branch" is selected
+    if (useWorktrees && !useCurrentBranch && !newFeature.branchName.trim()) {
+      toast.error("Please select a branch name");
       return;
     }
 
@@ -134,6 +153,13 @@ export function AddFeatureDialog({
     const normalizedThinking = modelSupportsThinking(selectedModel)
       ? newFeature.thinkingLevel
       : "none";
+
+    // Use current branch if toggle is on
+    // If currentBranch is provided (non-primary worktree), use it
+    // Otherwise (primary worktree), use empty string which means "unassigned" (show only on primary)
+    const finalBranchName = useCurrentBranch
+      ? (currentBranch || "")
+      : newFeature.branchName || "";
 
     onAdd({
       category,
@@ -144,8 +170,10 @@ export function AddFeatureDialog({
       skipTests: newFeature.skipTests,
       model: selectedModel,
       thinkingLevel: normalizedThinking,
-      branchName: newFeature.branchName,
+      branchName: finalBranchName,
       priority: newFeature.priority,
+      planningMode,
+      requirePlanApproval,
     });
 
     // Reset form
@@ -159,8 +187,11 @@ export function AddFeatureDialog({
       model: "opus",
       priority: 2,
       thinkingLevel: "none",
-      branchName: defaultBranch,
+      branchName: "",
     });
+    setUseCurrentBranch(true);
+    setPlanningMode(defaultPlanningMode);
+    setRequirePlanApproval(defaultRequirePlanApproval);
     setNewFeaturePreviewMap(new Map());
     setShowAdvancedOptions(false);
     setDescriptionError(false);
@@ -231,13 +262,13 @@ export function AddFeatureDialog({
       <DialogContent
         compact={!isMaximized}
         data-testid="add-feature-dialog"
-        onPointerDownOutside={(e) => {
+        onPointerDownOutside={(e: CustomEvent) => {
           const target = e.target as HTMLElement;
           if (target.closest('[data-testid="category-autocomplete-list"]')) {
             e.preventDefault();
           }
         }}
-        onInteractOutside={(e) => {
+        onInteractOutside={(e: CustomEvent) => {
           const target = e.target as HTMLElement;
           if (target.closest('[data-testid="category-autocomplete-list"]')) {
             e.preventDefault();
@@ -263,9 +294,9 @@ export function AddFeatureDialog({
               <Settings2 className="w-4 h-4 mr-2" />
               Model
             </TabsTrigger>
-            <TabsTrigger value="testing" data-testid="tab-testing">
-              <FlaskConical className="w-4 h-4 mr-2" />
-              Testing
+            <TabsTrigger value="options" data-testid="tab-options">
+              <SlidersHorizontal className="w-4 h-4 mr-2" />
+              Options
             </TabsTrigger>
           </TabsList>
 
@@ -360,22 +391,17 @@ export function AddFeatureDialog({
               />
             </div>
             {useWorktrees && (
-              <div className="space-y-2">
-                <Label htmlFor="branch">Target Branch</Label>
-                <BranchAutocomplete
-                  value={newFeature.branchName}
-                  onChange={(value) =>
-                    setNewFeature({ ...newFeature, branchName: value })
-                  }
-                  branches={branchSuggestions}
-                  placeholder="Select or create branch..."
-                  data-testid="feature-branch-input"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Work will be done in this branch. A worktree will be created if
-                  needed.
-                </p>
-              </div>
+              <BranchSelector
+                useCurrentBranch={useCurrentBranch}
+                onUseCurrentBranchChange={setUseCurrentBranch}
+                branchName={newFeature.branchName}
+                onBranchNameChange={(value) =>
+                  setNewFeature({ ...newFeature, branchName: value })
+                }
+                branchSuggestions={branchSuggestions}
+                currentBranch={currentBranch}
+                testIdPrefix="feature"
+              />
             )}
 
             {/* Priority Selector */}
@@ -454,11 +480,22 @@ export function AddFeatureDialog({
             )}
           </TabsContent>
 
-          {/* Testing Tab */}
-          <TabsContent
-            value="testing"
-            className="space-y-4 overflow-y-auto cursor-default"
-          >
+          {/* Options Tab */}
+          <TabsContent value="options" className="space-y-4 overflow-y-auto cursor-default">
+            {/* Planning Mode Section */}
+            <PlanningModeSelector
+              mode={planningMode}
+              onModeChange={setPlanningMode}
+              requireApproval={requirePlanApproval}
+              onRequireApprovalChange={setRequirePlanApproval}
+              featureDescription={newFeature.description}
+              testIdPrefix="add-feature"
+              compact
+            />
+
+            <div className="border-t border-border my-4" />
+
+            {/* Testing Section */}
             <TestingTabContent
               skipTests={newFeature.skipTests}
               onSkipTestsChange={(skipTests) =>
@@ -478,6 +515,11 @@ export function AddFeatureDialog({
             hotkey={{ key: "Enter", cmdCtrl: true }}
             hotkeyActive={open}
             data-testid="confirm-add-feature"
+            disabled={
+              useWorktrees &&
+              !useCurrentBranch &&
+              !newFeature.branchName.trim()
+            }
           >
             Add Feature
           </HotkeyButton>

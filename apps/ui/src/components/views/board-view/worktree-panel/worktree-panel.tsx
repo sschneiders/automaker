@@ -20,6 +20,7 @@ export function WorktreePanel({
   onCommit,
   onCreatePR,
   onCreateBranch,
+  onRemovedWorktrees,
   runningFeatureIds = [],
   features = [],
   refreshTrigger = 0,
@@ -32,7 +33,7 @@ export function WorktreePanel({
     useWorktreesEnabled,
     fetchWorktrees,
     handleSelectWorktree,
-  } = useWorktrees({ projectPath, refreshTrigger });
+  } = useWorktrees({ projectPath, refreshTrigger, onRemovedWorktrees });
 
   const {
     isStartingDevServer,
@@ -73,10 +74,8 @@ export function WorktreePanel({
   const { defaultEditorName } = useDefaultEditor();
 
   const { hasRunningFeatures } = useRunningFeatures({
-    projectPath,
     runningFeatureIds,
     features,
-    getWorktreeKey,
   });
 
   const isWorktreeSelected = (worktree: WorktreeInfo) => {
@@ -162,7 +161,12 @@ export function WorktreePanel({
           variant="ghost"
           size="sm"
           className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-          onClick={fetchWorktrees}
+          onClick={async () => {
+            const removedWorktrees = await fetchWorktrees();
+            if (removedWorktrees && removedWorktrees.length > 0 && onRemovedWorktrees) {
+              onRemovedWorktrees(removedWorktrees);
+            }
+          }}
           disabled={isLoading}
           title="Refresh worktrees"
         >

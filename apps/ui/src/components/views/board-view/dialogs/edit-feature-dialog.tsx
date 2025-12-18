@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { HotkeyButton } from "@/components/ui/hotkey-button";
 import { Label } from "@/components/ui/label";
 import { CategoryAutocomplete } from "@/components/ui/category-autocomplete";
-import { BranchAutocomplete } from "@/components/ui/branch-autocomplete";
 import {
   DescriptionImageDropZone,
   FeatureImagePath as DescriptionImagePath,
@@ -22,6 +21,7 @@ import {
 import {
   MessageSquare,
   Settings2,
+  SlidersHorizontal,
   FlaskConical,
   Sparkles,
   ChevronDown,
@@ -36,6 +36,7 @@ import {
   ThinkingLevel,
   AIProfile,
   useAppStore,
+  PlanningMode,
 } from "@/store/app-store";
 import {
   ModelSelector,
@@ -43,6 +44,8 @@ import {
   ProfileQuickSelect,
   TestingTabContent,
   PrioritySelector,
+  BranchSelector,
+  PlanningModeSelector,
 } from "../shared";
 import {
   DropdownMenu,
@@ -65,12 +68,15 @@ interface EditFeatureDialogProps {
       model: AgentModel;
       thinkingLevel: ThinkingLevel;
       imagePaths: DescriptionImagePath[];
-      branchName: string;
+      branchName: string; // Can be empty string to use current branch
       priority: number;
+      planningMode: PlanningMode;
+      requirePlanApproval: boolean;
     }
   ) => void;
   categorySuggestions: string[];
   branchSuggestions: string[];
+  currentBranch?: string;
   isMaximized: boolean;
   showProfilesOnly: boolean;
   aiProfiles: AIProfile[];
@@ -83,12 +89,17 @@ export function EditFeatureDialog({
   onUpdate,
   categorySuggestions,
   branchSuggestions,
+  currentBranch,
   isMaximized,
   showProfilesOnly,
   aiProfiles,
   allFeatures,
 }: EditFeatureDialogProps) {
   const [editingFeature, setEditingFeature] = useState<Feature | null>(feature);
+  const [useCurrentBranch, setUseCurrentBranch] = useState(() => {
+    // If feature has no branchName, default to using current branch
+    return !feature?.branchName;
+  });
   const [editFeaturePreviewMap, setEditFeaturePreviewMap] =
     useState<ImagePreviewMap>(() => new Map());
   const [showEditAdvancedOptions, setShowEditAdvancedOptions] = useState(false);
@@ -97,13 +108,20 @@ export function EditFeatureDialog({
     "improve" | "technical" | "simplify" | "acceptance"
   >("improve");
   const [showDependencyTree, setShowDependencyTree] = useState(false);
+  const [planningMode, setPlanningMode] = useState<PlanningMode>(feature?.planningMode ?? 'skip');
+  const [requirePlanApproval, setRequirePlanApproval] = useState(feature?.requirePlanApproval ?? false);
 
   // Get enhancement model and worktrees setting from store
   const { enhancementModel, useWorktrees } = useAppStore();
 
   useEffect(() => {
     setEditingFeature(feature);
-    if (!feature) {
+    if (feature) {
+      setPlanningMode(feature.planningMode ?? 'skip');
+      setRequirePlanApproval(feature.requirePlanApproval ?? false);
+      // If feature has no branchName, default to using current branch
+      setUseCurrentBranch(!feature.branchName);
+    } else {
       setEditFeaturePreviewMap(new Map());
       setShowEditAdvancedOptions(false);
     }
@@ -112,12 +130,31 @@ export function EditFeatureDialog({
   const handleUpdate = () => {
     if (!editingFeature) return;
 
+    // Validate branch selection when "other branch" is selected and branch selector is enabled
+    const isBranchSelectorEnabled = editingFeature.status === "backlog";
+    if (
+      useWorktrees &&
+      isBranchSelectorEnabled &&
+      !useCurrentBranch &&
+      !editingFeature.branchName?.trim()
+    ) {
+      toast.error("Please select a branch name");
+      return;
+    }
+
     const selectedModel = (editingFeature.model ?? "opus") as AgentModel;
     const normalizedThinking: ThinkingLevel = modelSupportsThinking(
       selectedModel
     )
       ? editingFeature.thinkingLevel ?? "none"
       : "none";
+
+    // Use current branch if toggle is on
+    // If currentBranch is provided (non-primary worktree), use it
+    // Otherwise (primary worktree), use empty string which means "unassigned" (show only on primary)
+    const finalBranchName = useCurrentBranch
+      ? (currentBranch || "")
+      : editingFeature.branchName || "";
 
     const updates = {
       category: editingFeature.category,
@@ -127,8 +164,10 @@ export function EditFeatureDialog({
       model: selectedModel,
       thinkingLevel: normalizedThinking,
       imagePaths: editingFeature.imagePaths ?? [],
-      branchName: editingFeature.branchName ?? "main",
+      branchName: finalBranchName,
       priority: editingFeature.priority ?? 2,
+      planningMode,
+      requirePlanApproval,
     };
 
     onUpdate(editingFeature.id, updates);
@@ -206,13 +245,13 @@ export function EditFeatureDialog({
       <DialogContent
         compact={!isMaximized}
         data-testid="edit-feature-dialog"
-        onPointerDownOutside={(e) => {
+        onPointerDownOutside={(e: CustomEvent) => {
           const target = e.target as HTMLElement;
           if (target.closest('[data-testid="category-autocomplete-list"]')) {
             e.preventDefault();
           }
         }}
-        onInteractOutside={(e) => {
+        onInteractOutside={(e: CustomEvent) => {
           const target = e.target as HTMLElement;
           if (target.closest('[data-testid="category-autocomplete-list"]')) {
             e.preventDefault();
@@ -236,9 +275,9 @@ export function EditFeatureDialog({
               <Settings2 className="w-4 h-4 mr-2" />
               Model
             </TabsTrigger>
-            <TabsTrigger value="testing" data-testid="edit-tab-testing">
-              <FlaskConical className="w-4 h-4 mr-2" />
-              Testing
+            <TabsTrigger value="options" data-testid="edit-tab-options">
+              <SlidersHorizontal className="w-4 h-4 mr-2" />
+              Options
             </TabsTrigger>
           </TabsList>
 
@@ -338,33 +377,21 @@ export function EditFeatureDialog({
               />
             </div>
             {useWorktrees && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-branch">Target Branch</Label>
-                <BranchAutocomplete
-                  value={editingFeature.branchName ?? "main"}
-                  onChange={(value) =>
-                    setEditingFeature({
-                      ...editingFeature,
-                      branchName: value,
-                    })
-                  }
-                  branches={branchSuggestions}
-                  placeholder="Select or create branch..."
-                  data-testid="edit-feature-branch"
-                  disabled={editingFeature.status !== "backlog"}
-                />
-                {editingFeature.status !== "backlog" && (
-                  <p className="text-xs text-muted-foreground">
-                    Branch cannot be changed after work has started.
-                  </p>
-                )}
-                {editingFeature.status === "backlog" && (
-                  <p className="text-xs text-muted-foreground">
-                    Work will be done in this branch. A worktree will be created
-                    if needed.
-                  </p>
-                )}
-              </div>
+              <BranchSelector
+                useCurrentBranch={useCurrentBranch}
+                onUseCurrentBranchChange={setUseCurrentBranch}
+                branchName={editingFeature.branchName ?? ""}
+                onBranchNameChange={(value) =>
+                  setEditingFeature({
+                    ...editingFeature,
+                    branchName: value,
+                  })
+                }
+                branchSuggestions={branchSuggestions}
+                currentBranch={currentBranch}
+                disabled={editingFeature.status !== "backlog"}
+                testIdPrefix="edit-feature"
+              />
             )}
 
             {/* Priority Selector */}
@@ -449,11 +476,22 @@ export function EditFeatureDialog({
             )}
           </TabsContent>
 
-          {/* Testing Tab */}
-          <TabsContent
-            value="testing"
-            className="space-y-4 overflow-y-auto cursor-default"
-          >
+          {/* Options Tab */}
+          <TabsContent value="options" className="space-y-4 overflow-y-auto cursor-default">
+            {/* Planning Mode Section */}
+            <PlanningModeSelector
+              mode={planningMode}
+              onModeChange={setPlanningMode}
+              requireApproval={requirePlanApproval}
+              onRequireApprovalChange={setRequirePlanApproval}
+              featureDescription={editingFeature.description}
+              testIdPrefix="edit-feature"
+              compact
+            />
+
+            <div className="border-t border-border my-4" />
+
+            {/* Testing Section */}
             <TestingTabContent
               skipTests={editingFeature.skipTests ?? false}
               onSkipTestsChange={(skipTests) =>
@@ -485,6 +523,12 @@ export function EditFeatureDialog({
               hotkey={{ key: "Enter", cmdCtrl: true }}
               hotkeyActive={!!editingFeature}
               data-testid="confirm-edit-feature"
+              disabled={
+                useWorktrees &&
+                editingFeature.status === "backlog" &&
+                !useCurrentBranch &&
+                !editingFeature.branchName?.trim()
+              }
             >
               Save Changes
             </HotkeyButton>

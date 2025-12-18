@@ -193,32 +193,8 @@ export type AutoModeEvent =
   | {
       type: "auto_mode_error";
       error: string;
-      errorType?: "authentication" | "execution";
+      errorType?: "authentication" | "cancellation" | "abort" | "execution";
       featureId?: string;
-      projectId?: string;
-      projectPath?: string;
-    }
-  | {
-      type: "auto_mode_complete";
-      message: string;
-      projectId?: string;
-      projectPath?: string;
-    }
-  | {
-      type: "auto_mode_stopped";
-      message: string;
-      projectId?: string;
-      projectPath?: string;
-    }
-  | {
-      type: "auto_mode_started";
-      message: string;
-      projectId?: string;
-      projectPath?: string;
-    }
-  | {
-      type: "auto_mode_idle";
-      message: string;
       projectId?: string;
       projectPath?: string;
     }
@@ -238,6 +214,71 @@ export type AutoModeEvent =
       recommendations: string[];
       estimatedCost?: number;
       estimatedTime?: string;
+    }
+  | {
+      type: "plan_approval_required";
+      featureId: string;
+      projectPath?: string;
+      planContent: string;
+      planningMode: "lite" | "spec" | "full";
+      planVersion?: number;
+    }
+  | {
+      type: "plan_auto_approved";
+      featureId: string;
+      projectPath?: string;
+      planContent: string;
+      planningMode: "lite" | "spec" | "full";
+    }
+  | {
+      type: "plan_approved";
+      featureId: string;
+      projectPath?: string;
+      hasEdits: boolean;
+      planVersion?: number;
+    }
+  | {
+      type: "plan_rejected";
+      featureId: string;
+      projectPath?: string;
+      feedback?: string;
+    }
+  | {
+      type: "plan_revision_requested";
+      featureId: string;
+      projectPath?: string;
+      feedback?: string;
+      hasEdits?: boolean;
+      planVersion?: number;
+    }
+  | {
+      type: "planning_started";
+      featureId: string;
+      mode: "lite" | "spec" | "full";
+      message: string;
+    }
+  | {
+      type: "auto_mode_task_started";
+      featureId: string;
+      projectPath?: string;
+      taskId: string;
+      taskDescription: string;
+      taskIndex: number;
+      tasksTotal: number;
+    }
+  | {
+      type: "auto_mode_task_complete";
+      featureId: string;
+      projectPath?: string;
+      taskId: string;
+      tasksCompleted: number;
+      tasksTotal: number;
+    }
+  | {
+      type: "auto_mode_phase_complete";
+      featureId: string;
+      projectPath?: string;
+      phaseNumber: number;
     };
 
 export type SpecRegenerationEvent =
@@ -310,20 +351,6 @@ export interface SpecRegenerationAPI {
 }
 
 export interface AutoModeAPI {
-  start: (
-    projectPath: string,
-    maxConcurrency?: number
-  ) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-
-  stop: (projectPath: string) => Promise<{
-    success: boolean;
-    error?: string;
-    runningFeatures?: number;
-  }>;
-
   stopFeature: (featureId: string) => Promise<{
     success: boolean;
     error?: string;
@@ -331,7 +358,6 @@ export interface AutoModeAPI {
 
   status: (projectPath?: string) => Promise<{
     success: boolean;
-    autoLoopRunning?: boolean;
     isRunning?: boolean;
     currentFeatureId?: string | null;
     runningFeatures?: string[];
@@ -343,8 +369,7 @@ export interface AutoModeAPI {
   runFeature: (
     projectPath: string,
     featureId: string,
-    useWorktrees?: boolean,
-    worktreePath?: string
+    useWorktrees?: boolean
   ) => Promise<{
     success: boolean;
     passes?: boolean;
@@ -390,7 +415,7 @@ export interface AutoModeAPI {
     featureId: string,
     prompt: string,
     imagePaths?: string[],
-    worktreePath?: string
+    useWorktrees?: boolean
   ) => Promise<{
     success: boolean;
     passes?: boolean;
@@ -400,6 +425,17 @@ export interface AutoModeAPI {
   commitFeature: (
     projectPath: string,
     featureId: string
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
+  approvePlan: (
+    projectPath: string,
+    featureId: string,
+    approved: boolean,
+    editedPlan?: string,
+    feedback?: string
   ) => Promise<{
     success: boolean;
     error?: string;
@@ -631,6 +667,10 @@ export interface WorktreeAPI {
       hasWorktree: boolean; // Does this branch have an active worktree?
       hasChanges?: boolean;
       changedFilesCount?: number;
+    }>;
+    removedWorktrees?: Array<{
+      path: string;
+      branch: string;
     }>;
     error?: string;
   }>;

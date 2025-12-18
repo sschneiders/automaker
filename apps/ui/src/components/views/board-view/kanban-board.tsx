@@ -13,7 +13,7 @@ import { HotkeyButton } from "@/components/ui/hotkey-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { KanbanColumn, KanbanCard } from "./components";
 import { Feature } from "@/store/app-store";
-import { FastForward, Lightbulb, Trash2 } from "lucide-react";
+import { FastForward, Lightbulb, Archive } from "lucide-react";
 import { useKeyboardShortcutsConfig } from "@/hooks/use-keyboard-shortcuts";
 import { COLUMNS, ColumnId } from "./constants";
 
@@ -46,13 +46,15 @@ interface KanbanBoardProps {
   onCommit: (feature: Feature) => void;
   onComplete: (feature: Feature) => void;
   onImplement: (feature: Feature) => void;
+  onViewPlan: (feature: Feature) => void;
+  onApprovePlan: (feature: Feature) => void;
   featuresWithContext: Set<string>;
   runningAutoTasks: string[];
   shortcuts: ReturnType<typeof useKeyboardShortcutsConfig>;
   onStartNextFeatures: () => void;
   onShowSuggestions: () => void;
   suggestionsCount: number;
-  onDeleteAllVerified: () => void;
+  onArchiveAllVerified: () => void;
 }
 
 export function KanbanBoard({
@@ -76,13 +78,15 @@ export function KanbanBoard({
   onCommit,
   onComplete,
   onImplement,
+  onViewPlan,
+  onApprovePlan,
   featuresWithContext,
   runningAutoTasks,
   shortcuts,
   onStartNextFeatures,
   onShowSuggestions,
   suggestionsCount,
-  onDeleteAllVerified,
+  onArchiveAllVerified,
 }: KanbanBoardProps) {
   return (
     <div
@@ -114,12 +118,12 @@ export function KanbanBoard({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={onDeleteAllVerified}
-                      data-testid="delete-all-verified-button"
+                      className="h-6 px-2 text-xs"
+                      onClick={onArchiveAllVerified}
+                      data-testid="archive-all-verified-button"
                     >
-                      <Trash2 className="w-3 h-3 mr-1" />
-                      Delete All
+                      <Archive className="w-3 h-3 mr-1" />
+                      Archive All
                     </Button>
                   ) : column.id === "backlog" ? (
                     <div className="flex items-center gap-1">
@@ -188,6 +192,8 @@ export function KanbanBoard({
                         onCommit={() => onCommit(feature)}
                         onComplete={() => onComplete(feature)}
                         onImplement={() => onImplement(feature)}
+                        onViewPlan={() => onViewPlan(feature)}
+                        onApprovePlan={() => onApprovePlan(feature)}
                         hasContext={featuresWithContext.has(feature.id)}
                         isCurrentAutoTask={runningAutoTasks.includes(
                           feature.id

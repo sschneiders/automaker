@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   PointerSensor,
@@ -272,13 +271,16 @@ export function BoardView() {
 
   // Calculate unarchived card counts per branch
   const branchCardCounts = useMemo(() => {
-    return hookFeatures.reduce((counts, feature) => {
-      if (feature.status !== "completed") {
-        const branch = feature.branchName ?? "main";
-        counts[branch] = (counts[branch] || 0) + 1;
-      }
-      return counts;
-    }, {} as Record<string, number>);
+    return hookFeatures.reduce(
+      (counts, feature) => {
+        if (feature.status !== "completed") {
+          const branch = feature.branchName ?? "main";
+          counts[branch] = (counts[branch] || 0) + 1;
+        }
+        return counts;
+      },
+      {} as Record<string, number>
+    );
   }, [hookFeatures]);
 
   // Custom collision detection that prioritizes columns over cards
@@ -341,7 +343,7 @@ export function BoardView() {
   const worktrees = useMemo(
     () =>
       currentProject
-        ? worktreesByProject[currentProject.path] ?? EMPTY_WORKTREES
+        ? (worktreesByProject[currentProject.path] ?? EMPTY_WORKTREES)
         : EMPTY_WORKTREES,
     [currentProject, worktreesByProject]
   );
@@ -429,7 +431,11 @@ export function BoardView() {
               worktree.path,
               worktree.branch
             );
-            if (result.success && result.result?.hasPR && result.result.prInfo) {
+            if (
+              result.success &&
+              result.result?.hasPR &&
+              result.result.prInfo
+            ) {
               fullPRInfo = result.result.prInfo;
             }
           }
@@ -1244,7 +1250,7 @@ export function BoardView() {
         open={showCreatePRDialog}
         onOpenChange={setShowCreatePRDialog}
         worktree={selectedWorktreeForAction}
-<<<<<<< Updated upstream
+        projectPath={currentProject?.path || null}
         onCreated={(prUrl) => {
           // If a PR was created and we have the worktree branch, update all features on that branch with the PR URL
           if (prUrl && selectedWorktreeForAction?.branch) {
@@ -1256,10 +1262,6 @@ export function BoardView() {
                 persistFeatureUpdate(feature.id, { prUrl });
               });
           }
-=======
-        projectPath={currentProject?.path || null}
-        onCreated={() => {
->>>>>>> Stashed changes
           setWorktreeRefreshKey((k) => k + 1);
           setSelectedWorktreeForAction(null);
         }}

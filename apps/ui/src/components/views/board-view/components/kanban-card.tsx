@@ -57,6 +57,7 @@ import {
   Wand2,
   Archive,
   Lock,
+  Coins,
 } from "lucide-react";
 import { CountUpTimer } from "@/components/ui/count-up-timer";
 import { getElectronAPI } from "@/lib/electron";
@@ -88,6 +89,29 @@ function formatThinkingLevel(level: ThinkingLevel | undefined): string {
     ultrathink: "Ultra",
   };
   return labels[level];
+}
+
+/**
+ * Formats token counts for compact display (e.g., 12500 -> "12.5K")
+ */
+function formatTokenCount(count: number): string {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
+  return count.toString();
+}
+
+/**
+ * Formats cost for display (e.g., 0.0847 -> "$0.0847")
+ */
+function formatCost(cost: number): string {
+  if (cost < 0.01) {
+    return `$${cost.toFixed(4)}`;
+  }
+  return `$${cost.toFixed(2)}`;
 }
 
 interface KanbanCardProps {
@@ -873,6 +897,36 @@ export const KanbanCard = memo(function KanbanCard({
                       )}
                     </div>
                   )}
+                {/* Token Usage Display */}
+                {feature.tokenUsage && feature.tokenUsage.totalTokens > 0 && (
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 pt-2 border-t border-border/30">
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center gap-1 cursor-help">
+                            <Coins className="w-2.5 h-2.5 text-amber-400" />
+                            {formatTokenCount(feature.tokenUsage.totalTokens)} tokens
+                            <span className="text-amber-400/80">
+                              ({formatCost(feature.tokenUsage.costUSD)})
+                            </span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          <div className="space-y-1">
+                            <p>Input: {formatTokenCount(feature.tokenUsage.inputTokens)}</p>
+                            <p>Output: {formatTokenCount(feature.tokenUsage.outputTokens)}</p>
+                            {feature.tokenUsage.cacheReadInputTokens > 0 && (
+                              <p>Cache read: {formatTokenCount(feature.tokenUsage.cacheReadInputTokens)}</p>
+                            )}
+                            <p className="font-medium pt-1 border-t border-border/30">
+                              Cost: {formatCost(feature.tokenUsage.costUSD)}
+                            </p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
               </>
             )}
           </div>

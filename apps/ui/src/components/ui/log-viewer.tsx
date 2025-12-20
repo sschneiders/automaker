@@ -24,6 +24,7 @@ import {
   Circle,
   Play,
   Loader2,
+  Coins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -34,10 +35,35 @@ import {
   type LogEntryType,
   type ToolCategory,
 } from "@/lib/log-parser";
+import type { TokenUsage } from "@/store/app-store";
 
 interface LogViewerProps {
   output: string;
   className?: string;
+  tokenUsage?: TokenUsage;
+}
+
+/**
+ * Formats token counts for compact display (e.g., 12500 -> "12.5K")
+ */
+function formatTokenCount(count: number): string {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
+  return count.toString();
+}
+
+/**
+ * Formats cost for display (e.g., 0.0847 -> "$0.0847")
+ */
+function formatCost(cost: number): string {
+  if (cost < 0.01) {
+    return `$${cost.toFixed(4)}`;
+  }
+  return `$${cost.toFixed(2)}`;
 }
 
 const getLogIcon = (type: LogEntryType) => {
@@ -413,7 +439,7 @@ interface ToolCategoryStats {
   other: number;
 }
 
-export function LogViewer({ output, className }: LogViewerProps) {
+export function LogViewer({ output, className, tokenUsage }: LogViewerProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [hiddenTypes, setHiddenTypes] = useState<Set<LogEntryType>>(new Set());
@@ -615,6 +641,40 @@ export function LogViewer({ output, className }: LogViewerProps) {
 
   return (
     <div className={cn("flex flex-col", className)}>
+      {/* Token Usage Summary Header */}
+      {tokenUsage && tokenUsage.totalTokens > 0 && (
+        <div className="mb-3 p-2 bg-zinc-900/50 rounded-lg border border-zinc-700/50">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-medium">{formatTokenCount(tokenUsage.totalTokens)}</span>
+              <span className="text-muted-foreground/60">tokens</span>
+            </span>
+            <span className="text-muted-foreground/30">|</span>
+            <span className="flex items-center gap-1">
+              <span className="text-green-400">IN:</span>
+              <span>{formatTokenCount(tokenUsage.inputTokens)}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="text-blue-400">OUT:</span>
+              <span>{formatTokenCount(tokenUsage.outputTokens)}</span>
+            </span>
+            {tokenUsage.cacheReadInputTokens > 0 && (
+              <>
+                <span className="text-muted-foreground/30">|</span>
+                <span className="flex items-center gap-1">
+                  <span className="text-purple-400">Cache:</span>
+                  <span>{formatTokenCount(tokenUsage.cacheReadInputTokens)}</span>
+                </span>
+              </>
+            )}
+            <span className="text-muted-foreground/30">|</span>
+            <span className="flex items-center gap-1 text-amber-400 font-medium">
+              {formatCost(tokenUsage.costUSD)}
+            </span>
+          </div>
+        </div>
+      )}
       {/* Sticky header with search, stats, and filters */}
       {/* Use -top-4 to compensate for parent's p-4 padding, pt-4 to restore visual spacing */}
       <div className="sticky -top-4 z-10 bg-zinc-950/95 backdrop-blur-sm pt-4 pb-2 space-y-2 -mx-4 px-4">

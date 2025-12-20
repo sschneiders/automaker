@@ -49,6 +49,29 @@ export interface ContentBlock {
 }
 
 /**
+ * Token usage statistics from SDK execution
+ */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalTokens: number;
+  costUSD: number;
+}
+
+/**
+ * Per-model usage breakdown from SDK result
+ */
+export interface ModelUsageData {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  costUSD: number;
+}
+
+/**
  * Message returned by a provider (matches Claude SDK streaming format)
  */
 export interface ProviderMessage {
@@ -62,6 +85,15 @@ export interface ProviderMessage {
   result?: string;
   error?: string;
   parent_tool_use_id?: string | null;
+  // Token usage fields (present in result messages)
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  total_cost_usd?: number;
+  modelUsage?: Record<string, ModelUsageData>;
 }
 
 /**

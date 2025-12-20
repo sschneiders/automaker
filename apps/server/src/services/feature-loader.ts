@@ -11,6 +11,7 @@ import {
   getFeatureImagesDir,
   ensureAutomakerDir,
 } from "../lib/automaker-paths.js";
+import type { TokenUsage } from "../providers/types.js";
 
 export interface Feature {
   id: string;
@@ -43,6 +44,7 @@ export interface Feature {
   error?: string;
   summary?: string;
   startedAt?: string;
+  tokenUsage?: TokenUsage;
   [key: string]: unknown;  // Keep catch-all for extensibility
 }
 

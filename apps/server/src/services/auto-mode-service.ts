@@ -10,7 +10,7 @@
  */
 
 import { ProviderFactory } from "../providers/provider-factory.js";
-import type { ExecuteOptions } from "../providers/types.js";
+import type { ExecuteOptions, TokenUsage } from "../providers/types.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
@@ -1878,6 +1878,30 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
       : "";
     let specDetected = false;
 
+    // Token usage accumulator - tracks total usage across all streams
+    const accumulatedUsage: TokenUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 0,
+      costUSD: 0,
+    };
+
+    // Helper to accumulate usage from a result message
+    const accumulateUsage = (msg: { usage?: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }; total_cost_usd?: number }): void => {
+      if (msg.usage) {
+        accumulatedUsage.inputTokens += msg.usage.input_tokens || 0;
+        accumulatedUsage.outputTokens += msg.usage.output_tokens || 0;
+        accumulatedUsage.cacheReadInputTokens += msg.usage.cache_read_input_tokens || 0;
+        accumulatedUsage.cacheCreationInputTokens += msg.usage.cache_creation_input_tokens || 0;
+        accumulatedUsage.totalTokens = accumulatedUsage.inputTokens + accumulatedUsage.outputTokens;
+      }
+      if (msg.total_cost_usd !== undefined) {
+        accumulatedUsage.costUSD = msg.total_cost_usd;
+      }
+    };
+
     // Agent output goes to .automaker directory
     // Note: We use projectPath here, not workDir, because workDir might be a worktree path
     const featureDirForOutput = getFeatureDir(projectPath, featureId);
@@ -2101,6 +2125,7 @@ After generating the revised spec, output:
                           throw new Error(msg.error || "Error during plan revision");
                         } else if (msg.type === "result" && msg.subtype === "success") {
                           revisionText += msg.result || "";
+                          accumulateUsage(msg);
                         }
                       }
 
@@ -2238,6 +2263,7 @@ After generating the revised spec, output:
                     } else if (msg.type === "result" && msg.subtype === "success") {
                       taskOutput += msg.result || "";
                       responseText += msg.result || "";
+                      accumulateUsage(msg);
                     }
                   }
 
@@ -2318,6 +2344,7 @@ Implement all the changes described in the plan above.`;
                     throw new Error(msg.error || "Unknown error during implementation");
                   } else if (msg.type === "result" && msg.subtype === "success") {
                     responseText += msg.result || "";
+                    accumulateUsage(msg);
                   }
                 }
               }
@@ -2365,6 +2392,8 @@ Implement all the changes described in the plan above.`;
         // The msg.result is just a summary which would lose all tool use details
         // Just ensure final write happens
         scheduleWrite();
+        // Capture token usage from the result message
+        accumulateUsage(msg);
       }
     }
 
@@ -2374,6 +2403,31 @@ Implement all the changes described in the plan above.`;
     }
     // Final write - ensure all accumulated content is saved
     await writeToFile();
+
+    // Save token usage to the feature if any tokens were consumed
+    if (accumulatedUsage.totalTokens > 0) {
+      try {
+        // Load existing feature to check for previous token usage
+        const existingFeature = await this.featureLoader.get(projectPath, featureId);
+        if (existingFeature) {
+          // If feature already has token usage, add to it (for follow-ups)
+          const existingUsage = existingFeature.tokenUsage;
+          if (existingUsage) {
+            accumulatedUsage.inputTokens += existingUsage.inputTokens;
+            accumulatedUsage.outputTokens += existingUsage.outputTokens;
+            accumulatedUsage.cacheReadInputTokens += existingUsage.cacheReadInputTokens;
+            accumulatedUsage.cacheCreationInputTokens += existingUsage.cacheCreationInputTokens;
+            accumulatedUsage.totalTokens = accumulatedUsage.inputTokens + accumulatedUsage.outputTokens;
+            accumulatedUsage.costUSD += existingUsage.costUSD;
+          }
+        }
+        await this.featureLoader.update(projectPath, featureId, { tokenUsage: accumulatedUsage });
+        console.log(`[AutoMode] Token usage:`, accumulatedUsage);
+        console.log(`[AutoMode] Saved token usage for ${featureId}: ${accumulatedUsage.totalTokens} tokens, $${accumulatedUsage.costUSD.toFixed(4)}`);
+      } catch (error) {
+        console.error(`[AutoMode] Failed to save token usage for ${featureId}:`, error);
+      }
+    }
   }
 
   private async executeFeatureWithContext(

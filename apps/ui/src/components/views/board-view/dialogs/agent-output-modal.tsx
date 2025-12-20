@@ -44,6 +44,8 @@ export function AgentOutputModal({
   const autoScrollRef = useRef(true);
   const projectPathRef = useRef<string>("");
   const useWorktrees = useAppStore((state) => state.useWorktrees);
+  const features = useAppStore((state) => state.features);
+  const feature = features.find((f) => f.id === featureId);
 
   // Auto-scroll to bottom when output changes
   useEffect(() => {
@@ -387,7 +389,7 @@ export function AgentOutputModal({
                   No output yet. The agent will stream output here as it works.
                 </div>
               ) : viewMode === "parsed" ? (
-                <LogViewer output={output} />
+                <LogViewer output={output} tokenUsage={feature?.tokenUsage} />
               ) : (
                 <div className="whitespace-pre-wrap break-words text-zinc-300">
                   {output}

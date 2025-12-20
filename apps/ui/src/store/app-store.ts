@@ -278,6 +278,16 @@ export interface AIProfile {
   icon?: string; // Optional icon name from lucide
 }
 
+// Token usage statistics for tracking API costs per task
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalTokens: number;
+  costUSD: number;
+}
+
 export interface Feature {
   id: string;
   category: string;
@@ -305,6 +315,7 @@ export interface Feature {
   planningMode?: PlanningMode; // Planning mode for this feature
   planSpec?: PlanSpec; // Generated spec/plan data
   requirePlanApproval?: boolean; // Whether to pause and require manual approval before implementation
+  tokenUsage?: TokenUsage; // Token consumption tracking for this task
 }
 
 // Parsed task from spec (for spec and full planning modes)

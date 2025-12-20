@@ -157,7 +157,7 @@ export function WorktreeTab({
         className={cn(
           "ml-1.5 inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition-colors",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background",
-          "appearance-none cursor-pointer", // Reset button appearance but keep cursor
+          "appearance-none cursor-pointer hover:opacity-80 active:opacity-70", // Reset button appearance but keep cursor, add hover/active states
           prStateClasses
         )}
         style={{
@@ -165,24 +165,28 @@ export function WorktreeTab({
           backgroundImage: "none",
           boxShadow: "none",
         }}
-        title={prLabel}
-        aria-label={prLabel}
+        title={`${prLabel} - Click to open`}
+        aria-label={`${prLabel} - Click to open pull request`}
         onClick={(e) => {
           e.stopPropagation(); // Prevent triggering worktree selection
-          window.open(worktree.pr.url, "_blank", "noopener,noreferrer");
+          if (worktree.pr?.url) {
+            window.open(worktree.pr.url, "_blank", "noopener,noreferrer");
+          }
         }}
         onKeyDown={(e) => {
           // Prevent event from bubbling to parent button
           e.stopPropagation();
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            window.open(worktree.pr.url, "_blank", "noopener,noreferrer");
+            if (worktree.pr?.url) {
+              window.open(worktree.pr.url, "_blank", "noopener,noreferrer");
+            }
           }
         }}
       >
         <GitPullRequest className={cn("w-3 h-3", getStatusColorClass())} aria-hidden="true" />
         <span aria-hidden="true" className={isSelected ? "text-foreground font-semibold" : ""}>
-          #{worktree.pr.number}
+          PR #{worktree.pr.number}
         </span>
         <span className={cn("capitalize", getStatusColorClass())} aria-hidden="true">
           {prState}

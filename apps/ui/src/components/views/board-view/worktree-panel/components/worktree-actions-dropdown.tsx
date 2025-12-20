@@ -185,13 +185,18 @@ export function WorktreeActionsDropdown({
         {/* Show PR info and Address Comments button if PR exists */}
         {!worktree.isMain && hasPR && worktree.pr && (
           <>
-            <DropdownMenuLabel className="text-xs flex items-center gap-2">
-              <GitPullRequest className="w-3 h-3" />
+            <DropdownMenuItem
+              onClick={() => {
+                window.open(worktree.pr!.url, "_blank");
+              }}
+              className="text-xs"
+            >
+              <GitPullRequest className="w-3 h-3 mr-2" />
               PR #{worktree.pr.number}
-              <span className="ml-auto text-[10px] bg-green-500/20 text-green-600 px-1.5 py-0.5 rounded">
+              <span className="ml-auto text-[10px] bg-green-500/20 text-green-600 px-1.5 py-0.5 rounded uppercase">
                 {worktree.pr.state}
               </span>
-            </DropdownMenuLabel>
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
                 // Convert stored PR info to the full PRInfo format for the handler

@@ -37,11 +37,31 @@ export function useProjectCreation({
         // Initialize .automaker directory structure
         await initializeProject(projectPath);
 
-        // Write initial app_spec.txt with basic XML structure
+        // Write initial app_spec.txt with proper XML structure
+        // Note: Must follow XML format as defined in apps/server/src/lib/app-spec-format.ts
         const api = getElectronAPI();
         await api.fs.writeFile(
-          `${projectPath}/app_spec.txt`,
-          `<?xml version="1.0" encoding="UTF-8"?>\n<project>\n  <name>${projectName}</name>\n  <description>Add your project description here</description>\n</project>`
+          `${projectPath}/.automaker/app_spec.txt`,
+          `<project_specification>
+  <project_name>${projectName}</project_name>
+
+  <overview>
+    Describe your project here. This file will be analyzed by an AI agent
+    to understand your project structure and tech stack.
+  </overview>
+
+  <technology_stack>
+    <!-- The AI agent will fill this in after analyzing your project -->
+  </technology_stack>
+
+  <core_capabilities>
+    <!-- List core features and capabilities -->
+  </core_capabilities>
+
+  <implemented_features>
+    <!-- The AI agent will populate this based on code analysis -->
+  </implemented_features>
+</project_specification>`
         );
 
         // Determine theme: try trashed project theme, then current project theme, then global
@@ -112,8 +132,50 @@ export function useProjectCreation({
         // Clone template repository
         await api.git.clone(template.githubUrl, projectPath);
 
-        // Finalize project setup
-        await finalizeProjectCreation(projectPath, projectName);
+        // Initialize .automaker directory structure
+        await initializeProject(projectPath);
+
+        // Write app_spec.txt with template-specific info
+        await api.fs.writeFile(
+          `${projectPath}/.automaker/app_spec.txt`,
+          `<project_specification>
+  <project_name>${projectName}</project_name>
+
+  <overview>
+    This project was created from the "${template.name}" starter template.
+    ${template.description}
+  </overview>
+
+  <technology_stack>
+    ${template.techStack.map((tech) => `<technology>${tech}</technology>`).join('\n    ')}
+  </technology_stack>
+
+  <core_capabilities>
+    ${template.features.map((feature) => `<capability>${feature}</capability>`).join('\n    ')}
+  </core_capabilities>
+
+  <implemented_features>
+    <!-- The AI agent will populate this based on code analysis -->
+  </implemented_features>
+</project_specification>`
+        );
+
+        // Determine theme
+        const trashedProject = trashedProjects.find((p) => p.path === projectPath);
+        const effectiveTheme =
+          (trashedProject?.theme as ThemeMode | undefined) ||
+          (currentProject?.theme as ThemeMode | undefined) ||
+          globalTheme;
+
+        upsertAndSetCurrentProject(projectPath, projectName, effectiveTheme);
+        setShowNewProjectModal(false);
+        setNewProjectName(projectName);
+        setNewProjectPath(projectPath);
+        setShowOnboardingDialog(true);
+
+        toast.success('Project created from template', {
+          description: `Created ${projectName} from ${template.name}`,
+        });
       } catch (error) {
         console.error('[ProjectCreation] Failed to create from template:', error);
         toast.error('Failed to create project from template', {
@@ -123,7 +185,7 @@ export function useProjectCreation({
         setIsCreatingProject(false);
       }
     },
-    [finalizeProjectCreation]
+    [trashedProjects, currentProject, globalTheme, upsertAndSetCurrentProject]
   );
 
   /**
@@ -139,8 +201,50 @@ export function useProjectCreation({
         // Clone custom repository
         await api.git.clone(repoUrl, projectPath);
 
-        // Finalize project setup
-        await finalizeProjectCreation(projectPath, projectName);
+        // Initialize .automaker directory structure
+        await initializeProject(projectPath);
+
+        // Write app_spec.txt with custom URL info
+        await api.fs.writeFile(
+          `${projectPath}/.automaker/app_spec.txt`,
+          `<project_specification>
+  <project_name>${projectName}</project_name>
+
+  <overview>
+    This project was cloned from ${repoUrl}.
+    The AI agent will analyze the project structure.
+  </overview>
+
+  <technology_stack>
+    <!-- The AI agent will fill this in after analyzing your project -->
+  </technology_stack>
+
+  <core_capabilities>
+    <!-- List core features and capabilities -->
+  </core_capabilities>
+
+  <implemented_features>
+    <!-- The AI agent will populate this based on code analysis -->
+  </implemented_features>
+</project_specification>`
+        );
+
+        // Determine theme
+        const trashedProject = trashedProjects.find((p) => p.path === projectPath);
+        const effectiveTheme =
+          (trashedProject?.theme as ThemeMode | undefined) ||
+          (currentProject?.theme as ThemeMode | undefined) ||
+          globalTheme;
+
+        upsertAndSetCurrentProject(projectPath, projectName, effectiveTheme);
+        setShowNewProjectModal(false);
+        setNewProjectName(projectName);
+        setNewProjectPath(projectPath);
+        setShowOnboardingDialog(true);
+
+        toast.success('Project created from repository', {
+          description: `Created ${projectName} from ${repoUrl}`,
+        });
       } catch (error) {
         console.error('[ProjectCreation] Failed to create from custom URL:', error);
         toast.error('Failed to create project from URL', {
@@ -150,7 +254,7 @@ export function useProjectCreation({
         setIsCreatingProject(false);
       }
     },
-    [finalizeProjectCreation]
+    [trashedProjects, currentProject, globalTheme, upsertAndSetCurrentProject]
   );
 
   return {

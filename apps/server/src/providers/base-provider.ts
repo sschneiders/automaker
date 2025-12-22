@@ -9,6 +9,10 @@ import type {
   InstallationStatus,
   ValidationResult,
   ModelDefinition,
+  SimpleQueryOptions,
+  SimpleQueryResult,
+  StreamingQueryOptions,
+  StreamingQueryResult,
 } from './types.js';
 
 /**
@@ -34,6 +38,22 @@ export abstract class BaseProvider {
    * @returns AsyncGenerator yielding provider messages
    */
   abstract executeQuery(options: ExecuteOptions): AsyncGenerator<ProviderMessage>;
+
+  /**
+   * Execute a simple one-shot query and return text directly
+   * Use for quick completions without tools (title gen, descriptions, etc.)
+   * @param options Simple query options
+   * @returns Query result with text
+   */
+  abstract executeSimpleQuery(options: SimpleQueryOptions): Promise<SimpleQueryResult>;
+
+  /**
+   * Execute a streaming query with tools and/or structured output
+   * Use for queries that need tools, progress callbacks, or structured JSON output
+   * @param options Streaming query options
+   * @returns Query result with text and optional structured output
+   */
+  abstract executeStreamingQuery(options: StreamingQueryOptions): Promise<StreamingQueryResult>;
 
   /**
    * Detect if the provider is installed and configured

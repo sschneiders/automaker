@@ -1,8 +1,8 @@
 /**
  * POST /context/describe-image endpoint - Generate description for an image
  *
- * Uses Claude Haiku to analyze an image and generate a concise description
- * suitable for context file metadata.
+ * Uses Claude Haiku via ClaudeProvider to analyze an image and generate
+ * a concise description suitable for context file metadata.
  *
  * IMPORTANT:
  * The agent runner (chat/auto-mode) sends images as multi-part content blocks (base64 image blocks),
@@ -11,10 +11,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createLogger, readImageAsBase64 } from '@automaker/utils';
-import { CLAUDE_MODEL_MAP } from '@automaker/types';
-import { createCustomOptions } from '../../../lib/sdk-options.js';
+import { ProviderFactory } from '../../../providers/provider-factory.js';
+import type { PromptContentBlock } from '../../../providers/types.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -174,53 +173,6 @@ function mapDescribeImageError(rawMessage: string | undefined): {
 }
 
 /**
- * Extract text content from Claude SDK response messages and log high-signal stream events.
- */
-async function extractTextFromStream(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  stream: AsyncIterable<any>,
-  requestId: string
-): Promise<string> {
-  let responseText = '';
-  let messageCount = 0;
-
-  logger.info(`[${requestId}] [Stream] Begin reading SDK stream...`);
-
-  for await (const msg of stream) {
-    messageCount++;
-    const msgType = msg?.type;
-    const msgSubtype = msg?.subtype;
-
-    // Keep this concise but informative. Full error object is logged in catch blocks.
-    logger.info(
-      `[${requestId}] [Stream] #${messageCount} type=${String(msgType)} subtype=${String(msgSubtype ?? '')}`
-    );
-
-    if (msgType === 'assistant' && msg.message?.content) {
-      const blocks = msg.message.content as Array<{ type: string; text?: string }>;
-      logger.info(`[${requestId}] [Stream] assistant blocks=${blocks.length}`);
-      for (const block of blocks) {
-        if (block.type === 'text' && block.text) {
-          responseText += block.text;
-        }
-      }
-    }
-
-    if (msgType === 'result' && msgSubtype === 'success') {
-      if (typeof msg.result === 'string' && msg.result.length > 0) {
-        responseText = msg.result;
-      }
-    }
-  }
-
-  logger.info(
-    `[${requestId}] [Stream] End of stream. messages=${messageCount} textLength=${responseText.length}`
-  );
-
-  return responseText;
-}
-
-/**
  * Create the describe-image request handler
  *
  * Uses Claude SDK query with multi-part content blocks to include the image (base64),
@@ -308,13 +260,17 @@ export function createDescribeImageHandler(): (req: Request, res: Response) => P
         `"Architecture diagram of microservices", "Screenshot of error message in terminal").\n\n` +
         `Respond with ONLY the description text, no additional formatting, preamble, or explanation.`;
 
-      const promptContent = [
-        { type: 'text' as const, text: instructionText },
+      const promptContent: PromptContentBlock[] = [
+        { type: 'text', text: instructionText },
         {
-          type: 'image' as const,
+          type: 'image',
           source: {
-            type: 'base64' as const,
-            media_type: imageData.mimeType,
+            type: 'base64',
+            media_type: imageData.mimeType as
+              | 'image/jpeg'
+              | 'image/png'
+              | 'image/gif'
+              | 'image/webp',
             data: imageData.base64,
           },
         },
@@ -322,48 +278,26 @@ export function createDescribeImageHandler(): (req: Request, res: Response) => P
 
       logger.info(`[${requestId}] Built multi-part prompt blocks=${promptContent.length}`);
 
-      const cwd = path.dirname(actualPath);
-      logger.info(`[${requestId}] Using cwd=${cwd}`);
+      logger.info(`[${requestId}] Calling provider.executeSimpleQuery()...`);
+      const queryStart = Date.now();
 
-      // Use the same centralized option builder used across the server (validates cwd)
-      const sdkOptions = createCustomOptions({
-        cwd,
-        model: CLAUDE_MODEL_MAP.haiku,
-        maxTurns: 1,
-        allowedTools: [],
-        sandbox: { enabled: true, autoAllowBashIfSandboxed: true },
+      const provider = ProviderFactory.getProviderForModel('haiku');
+      const result = await provider.executeSimpleQuery({
+        prompt: promptContent,
+        model: 'haiku',
       });
 
-      logger.info(
-        `[${requestId}] SDK options model=${sdkOptions.model} maxTurns=${sdkOptions.maxTurns} allowedTools=${JSON.stringify(
-          sdkOptions.allowedTools
-        )} sandbox=${JSON.stringify(sdkOptions.sandbox)}`
-      );
+      logger.info(`[${requestId}] Query completed in ${Date.now() - queryStart}ms`);
 
-      const promptGenerator = (async function* () {
-        yield {
-          type: 'user' as const,
-          session_id: '',
-          message: { role: 'user' as const, content: promptContent },
-          parent_tool_use_id: null,
-        };
-      })();
+      const description = result.success ? result.text : '';
 
-      logger.info(`[${requestId}] Calling query()...`);
-      const queryStart = Date.now();
-      const stream = query({ prompt: promptGenerator, options: sdkOptions });
-      logger.info(`[${requestId}] query() returned stream in ${Date.now() - queryStart}ms`);
-
-      // Extract the description from the response
-      const extractStart = Date.now();
-      const description = await extractTextFromStream(stream, requestId);
-      logger.info(`[${requestId}] extractMs=${Date.now() - extractStart}`);
-
-      if (!description || description.trim().length === 0) {
-        logger.warn(`[${requestId}] Received empty response from Claude`);
+      if (!result.success || !description || description.trim().length === 0) {
+        logger.warn(
+          `[${requestId}] Failed to generate description: ${result.error || 'empty response'}`
+        );
         const response: DescribeImageErrorResponse = {
           success: false,
-          error: 'Failed to generate description - empty response',
+          error: result.error || 'Failed to generate description - empty response',
           requestId,
         };
         res.status(500).json(response);

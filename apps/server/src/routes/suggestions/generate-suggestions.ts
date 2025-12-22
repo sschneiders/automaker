@@ -1,11 +1,12 @@
 /**
  * Business logic for generating suggestions
+ *
+ * Uses ClaudeProvider.executeStreamingQuery() for SDK interaction.
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { EventEmitter } from '../../lib/events.js';
 import { createLogger } from '@automaker/utils';
-import { createSuggestionsOptions } from '../../lib/sdk-options.js';
+import { ProviderFactory } from '../../providers/provider-factory.js';
 
 const logger = createLogger('Suggestions');
 
@@ -68,62 +69,44 @@ The response will be automatically formatted as structured JSON.`;
     content: `Starting ${suggestionType} analysis...\n`,
   });
 
-  const options = createSuggestionsOptions({
+  const provider = ProviderFactory.getProviderForModel('haiku');
+  const result = await provider.executeStreamingQuery({
+    prompt,
+    model: 'haiku',
     cwd: projectPath,
+    maxTurns: 250,
+    allowedTools: ['Read', 'Glob', 'Grep'],
     abortController,
     outputFormat: {
       type: 'json_schema',
       schema: suggestionsSchema,
     },
+    onText: (text) => {
+      events.emit('suggestions:event', {
+        type: 'suggestions_progress',
+        content: text,
+      });
+    },
+    onToolUse: (name, input) => {
+      events.emit('suggestions:event', {
+        type: 'suggestions_tool',
+        tool: name,
+        input,
+      });
+    },
   });
-
-  const stream = query({ prompt, options });
-  let responseText = '';
-  let structuredOutput: { suggestions: Array<Record<string, unknown>> } | null = null;
-
-  for await (const msg of stream) {
-    if (msg.type === 'assistant' && msg.message.content) {
-      for (const block of msg.message.content) {
-        if (block.type === 'text') {
-          responseText += block.text;
-          events.emit('suggestions:event', {
-            type: 'suggestions_progress',
-            content: block.text,
-          });
-        } else if (block.type === 'tool_use') {
-          events.emit('suggestions:event', {
-            type: 'suggestions_tool',
-            tool: block.name,
-            input: block.input,
-          });
-        }
-      }
-    } else if (msg.type === 'result' && msg.subtype === 'success') {
-      // Check for structured output
-      const resultMsg = msg as any;
-      if (resultMsg.structured_output) {
-        structuredOutput = resultMsg.structured_output as {
-          suggestions: Array<Record<string, unknown>>;
-        };
-        logger.debug('Received structured output:', structuredOutput);
-      }
-    } else if (msg.type === 'result') {
-      const resultMsg = msg as any;
-      if (resultMsg.subtype === 'error_max_structured_output_retries') {
-        logger.error('Failed to produce valid structured output after retries');
-        throw new Error('Could not produce valid suggestions output');
-      } else if (resultMsg.subtype === 'error_max_turns') {
-        logger.error('Hit max turns limit before completing suggestions generation');
-        logger.warn(`Response text length: ${responseText.length} chars`);
-        // Still try to parse what we have
-      }
-    }
-  }
 
   // Use structured output if available, otherwise fall back to parsing text
   try {
+    const structuredOutput = result.structuredOutput as
+      | {
+          suggestions: Array<Record<string, unknown>>;
+        }
+      | undefined;
+
     if (structuredOutput && structuredOutput.suggestions) {
       // Use structured output directly
+      logger.debug('Received structured output:', structuredOutput);
       events.emit('suggestions:event', {
         type: 'suggestions_complete',
         suggestions: structuredOutput.suggestions.map((s: Record<string, unknown>, i: number) => ({
@@ -134,7 +117,7 @@ The response will be automatically formatted as structured JSON.`;
     } else {
       // Fallback: try to parse from text (for backwards compatibility)
       logger.warn('No structured output received, attempting to parse from text');
-      const jsonMatch = responseText.match(/\{[\s\S]*"suggestions"[\s\S]*\}/);
+      const jsonMatch = result.text.match(/\{[\s\S]*"suggestions"[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         events.emit('suggestions:event', {

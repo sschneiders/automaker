@@ -1,15 +1,13 @@
 /**
  * POST /enhance-prompt endpoint - Enhance user input text
  *
- * Uses Claude AI to enhance text based on the specified enhancement mode.
- * Supports modes: improve, technical, simplify, acceptance
+ * Uses Claude AI via ClaudeProvider to enhance text based on the specified
+ * enhancement mode. Supports modes: improve, technical, simplify, acceptance
  */
 
 import type { Request, Response } from 'express';
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createLogger } from '@automaker/utils';
-import { resolveModelString } from '@automaker/model-resolver';
-import { CLAUDE_MODEL_MAP } from '@automaker/types';
+import { ProviderFactory } from '../../../providers/provider-factory.js';
 import {
   getSystemPrompt,
   buildUserPrompt,
@@ -45,39 +43,6 @@ interface EnhanceSuccessResponse {
 interface EnhanceErrorResponse {
   success: false;
   error: string;
-}
-
-/**
- * Extract text content from Claude SDK response messages
- *
- * @param stream - The async iterable from the query function
- * @returns The extracted text content
- */
-async function extractTextFromStream(
-  stream: AsyncIterable<{
-    type: string;
-    subtype?: string;
-    result?: string;
-    message?: {
-      content?: Array<{ type: string; text?: string }>;
-    };
-  }>
-): Promise<string> {
-  let responseText = '';
-
-  for await (const msg of stream) {
-    if (msg.type === 'assistant' && msg.message?.content) {
-      for (const block of msg.message.content) {
-        if (block.type === 'text' && block.text) {
-          responseText += block.text;
-        }
-      }
-    } else if (msg.type === 'result' && msg.subtype === 'success') {
-      responseText = msg.result || responseText;
-    }
-  }
-
-  return responseText;
 }
 
 /**
@@ -132,45 +97,30 @@ export function createEnhanceHandler(): (req: Request, res: Response) => Promise
       const systemPrompt = getSystemPrompt(validMode);
 
       // Build the user prompt with few-shot examples
-      // This helps the model understand this is text transformation, not a coding task
       const userPrompt = buildUserPrompt(validMode, trimmedText, true);
 
-      // Resolve the model - use the passed model, default to sonnet for quality
-      const resolvedModel = resolveModelString(model, CLAUDE_MODEL_MAP.sonnet);
-
-      logger.debug(`Using model: ${resolvedModel}`);
-
-      // Call Claude SDK with minimal configuration for text transformation
-      // Key: no tools, just text completion
-      const stream = query({
+      const provider = ProviderFactory.getProviderForModel(model || 'sonnet');
+      const result = await provider.executeSimpleQuery({
         prompt: userPrompt,
-        options: {
-          model: resolvedModel,
-          systemPrompt,
-          maxTurns: 1,
-          allowedTools: [],
-          permissionMode: 'acceptEdits',
-        },
+        model: model || 'sonnet',
+        systemPrompt,
       });
 
-      // Extract the enhanced text from the response
-      const enhancedText = await extractTextFromStream(stream);
-
-      if (!enhancedText || enhancedText.trim().length === 0) {
-        logger.warn('Received empty response from Claude');
+      if (!result.success) {
+        logger.warn('Failed to enhance text:', result.error);
         const response: EnhanceErrorResponse = {
           success: false,
-          error: 'Failed to generate enhanced text - empty response',
+          error: result.error || 'Failed to generate enhanced text',
         };
         res.status(500).json(response);
         return;
       }
 
-      logger.info(`Enhancement complete, output length: ${enhancedText.length} chars`);
+      logger.info(`Enhancement complete, output length: ${result.text.length} chars`);
 
       const response: EnhanceSuccessResponse = {
         success: true,
-        enhancedText: enhancedText.trim(),
+        enhancedText: result.text,
       };
       res.json(response);
     } catch (error) {

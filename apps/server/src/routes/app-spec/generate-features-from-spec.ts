@@ -1,13 +1,13 @@
 /**
  * Generate features from existing app_spec.txt
+ *
+ * Uses ClaudeProvider.executeStreamingQuery() for SDK interaction.
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import * as secureFs from '../../lib/secure-fs.js';
 import type { EventEmitter } from '../../lib/events.js';
 import { createLogger } from '@automaker/utils';
-import { createFeatureGenerationOptions } from '../../lib/sdk-options.js';
-import { logAuthStatus } from './common.js';
+import { ProviderFactory } from '../../providers/provider-factory.js';
 import { parseAndCreateFeatures } from './parse-and-create-features.js';
 import { getAppSpecPath } from '@automaker/platform';
 
@@ -91,72 +91,37 @@ IMPORTANT: Do not ask for clarification. The specification is provided above. Ge
     projectPath: projectPath,
   });
 
-  const options = createFeatureGenerationOptions({
+  logger.info('Calling provider.executeStreamingQuery() for features...');
+
+  const provider = ProviderFactory.getProviderForModel('haiku');
+  const result = await provider.executeStreamingQuery({
+    prompt,
+    model: 'haiku',
     cwd: projectPath,
+    maxTurns: 50,
+    allowedTools: ['Read', 'Glob', 'Grep'],
     abortController,
+    onText: (text) => {
+      logger.debug(`Feature text block received (${text.length} chars)`);
+      events.emit('spec-regeneration:event', {
+        type: 'spec_regeneration_progress',
+        content: text,
+        projectPath: projectPath,
+      });
+    },
   });
 
-  logger.debug('SDK Options:', JSON.stringify(options, null, 2));
-  logger.info('Calling Claude Agent SDK query() for features...');
-
-  logAuthStatus('Right before SDK query() for features');
-
-  let stream;
-  try {
-    stream = query({ prompt, options });
-    logger.debug('query() returned stream successfully');
-  } catch (queryError) {
-    logger.error('❌ query() threw an exception:');
-    logger.error('Error:', queryError);
-    throw queryError;
+  if (!result.success) {
+    logger.error('❌ Feature generation failed:', result.error);
+    throw new Error(result.error || 'Feature generation failed');
   }
 
-  let responseText = '';
-  let messageCount = 0;
-
-  logger.debug('Starting to iterate over feature stream...');
-
-  try {
-    for await (const msg of stream) {
-      messageCount++;
-      logger.debug(
-        `Feature stream message #${messageCount}:`,
-        JSON.stringify({ type: msg.type, subtype: (msg as any).subtype }, null, 2)
-      );
-
-      if (msg.type === 'assistant' && msg.message.content) {
-        for (const block of msg.message.content) {
-          if (block.type === 'text') {
-            responseText += block.text;
-            logger.debug(`Feature text block received (${block.text.length} chars)`);
-            events.emit('spec-regeneration:event', {
-              type: 'spec_regeneration_progress',
-              content: block.text,
-              projectPath: projectPath,
-            });
-          }
-        }
-      } else if (msg.type === 'result' && (msg as any).subtype === 'success') {
-        logger.debug('Received success result for features');
-        responseText = (msg as any).result || responseText;
-      } else if ((msg as { type: string }).type === 'error') {
-        logger.error('❌ Received error message from feature stream:');
-        logger.error('Error message:', JSON.stringify(msg, null, 2));
-      }
-    }
-  } catch (streamError) {
-    logger.error('❌ Error while iterating feature stream:');
-    logger.error('Stream error:', streamError);
-    throw streamError;
-  }
-
-  logger.info(`Feature stream complete. Total messages: ${messageCount}`);
-  logger.info(`Feature response length: ${responseText.length} chars`);
+  logger.info(`Feature response length: ${result.text.length} chars`);
   logger.info('========== FULL RESPONSE TEXT ==========');
-  logger.info(responseText);
+  logger.info(result.text);
   logger.info('========== END RESPONSE TEXT ==========');
 
-  await parseAndCreateFeatures(projectPath, responseText, events);
+  await parseAndCreateFeatures(projectPath, result.text, events);
 
   logger.debug('========== generateFeaturesFromSpec() completed ==========');
 }

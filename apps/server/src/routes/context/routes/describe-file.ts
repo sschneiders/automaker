@@ -1,8 +1,8 @@
 /**
  * POST /context/describe-file endpoint - Generate description for a text file
  *
- * Uses Claude Haiku to analyze a text file and generate a concise description
- * suitable for context file metadata.
+ * Uses Claude Haiku via ClaudeProvider to analyze a text file and generate
+ * a concise description suitable for context file metadata.
  *
  * SECURITY: This endpoint validates file paths against ALLOWED_ROOT_DIRECTORY
  * and reads file content directly (not via Claude's Read tool) to prevent
@@ -10,11 +10,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createLogger } from '@automaker/utils';
-import { CLAUDE_MODEL_MAP } from '@automaker/types';
 import { PathNotAllowedError } from '@automaker/platform';
-import { createCustomOptions } from '../../../lib/sdk-options.js';
+import { ProviderFactory } from '../../../providers/provider-factory.js';
 import * as secureFs from '../../../lib/secure-fs.js';
 import * as path from 'path';
 
@@ -42,31 +40,6 @@ interface DescribeFileSuccessResponse {
 interface DescribeFileErrorResponse {
   success: false;
   error: string;
-}
-
-/**
- * Extract text content from Claude SDK response messages
- */
-async function extractTextFromStream(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  stream: AsyncIterable<any>
-): Promise<string> {
-  let responseText = '';
-
-  for await (const msg of stream) {
-    if (msg.type === 'assistant' && msg.message?.content) {
-      const blocks = msg.message.content as Array<{ type: string; text?: string }>;
-      for (const block of blocks) {
-        if (block.type === 'text' && block.text) {
-          responseText += block.text;
-        }
-      }
-    } else if (msg.type === 'result' && msg.subtype === 'success') {
-      responseText = msg.result || responseText;
-    }
-  }
-
-  return responseText;
 }
 
 /**
@@ -150,60 +123,39 @@ export function createDescribeFileHandler(): (req: Request, res: Response) => Pr
       const fileName = path.basename(resolvedPath);
 
       // Build prompt with file content passed as structured data
-      // The file content is included directly, not via tool invocation
-      const instructionText = `Analyze the following file and provide a 1-2 sentence description suitable for use as context in an AI coding assistant. Focus on what the file contains, its purpose, and why an AI agent might want to use this context in the future (e.g., "API documentation for the authentication endpoints", "Configuration file for database connections", "Coding style guidelines for the project").
+      const promptContent = [
+        {
+          type: 'text' as const,
+          text: `Analyze the following file and provide a 1-2 sentence description suitable for use as context in an AI coding assistant. Focus on what the file contains, its purpose, and why an AI agent might want to use this context in the future (e.g., "API documentation for the authentication endpoints", "Configuration file for database connections", "Coding style guidelines for the project").
 
 Respond with ONLY the description text, no additional formatting, preamble, or explanation.
 
-File: ${fileName}${truncated ? ' (truncated)' : ''}`;
-
-      const promptContent = [
-        { type: 'text' as const, text: instructionText },
+File: ${fileName}${truncated ? ' (truncated)' : ''}`,
+        },
         { type: 'text' as const, text: `\n\n--- FILE CONTENT ---\n${contentToAnalyze}` },
       ];
 
-      // Use the file's directory as the working directory
-      const cwd = path.dirname(resolvedPath);
-
-      // Use centralized SDK options with proper cwd validation
-      // No tools needed since we're passing file content directly
-      const sdkOptions = createCustomOptions({
-        cwd,
-        model: CLAUDE_MODEL_MAP.haiku,
-        maxTurns: 1,
-        allowedTools: [],
-        sandbox: { enabled: true, autoAllowBashIfSandboxed: true },
+      const provider = ProviderFactory.getProviderForModel('haiku');
+      const result = await provider.executeSimpleQuery({
+        prompt: promptContent,
+        model: 'haiku',
       });
 
-      const promptGenerator = (async function* () {
-        yield {
-          type: 'user' as const,
-          session_id: '',
-          message: { role: 'user' as const, content: promptContent },
-          parent_tool_use_id: null,
-        };
-      })();
-
-      const stream = query({ prompt: promptGenerator, options: sdkOptions });
-
-      // Extract the description from the response
-      const description = await extractTextFromStream(stream);
-
-      if (!description || description.trim().length === 0) {
-        logger.warn('Received empty response from Claude');
+      if (!result.success) {
+        logger.warn('Failed to generate description:', result.error);
         const response: DescribeFileErrorResponse = {
           success: false,
-          error: 'Failed to generate description - empty response',
+          error: result.error || 'Failed to generate description',
         };
         res.status(500).json(response);
         return;
       }
 
-      logger.info(`Description generated, length: ${description.length} chars`);
+      logger.info(`Description generated, length: ${result.text.length} chars`);
 
       const response: DescribeFileSuccessResponse = {
         success: true,
-        description: description.trim(),
+        description: result.text,
       };
       res.json(response);
     } catch (error) {

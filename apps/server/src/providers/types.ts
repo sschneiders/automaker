@@ -102,3 +102,92 @@ export interface ModelDefinition {
   tier?: 'basic' | 'standard' | 'premium';
   default?: boolean;
 }
+
+/**
+ * Content block for multi-part prompts (images, structured text)
+ */
+export interface TextContentBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface ImageContentBlock {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    data: string;
+  };
+}
+
+export type PromptContentBlock = TextContentBlock | ImageContentBlock;
+
+/**
+ * Options for simple one-shot queries (title generation, descriptions, text enhancement)
+ *
+ * These queries:
+ * - Don't need tools
+ * - Return text directly (no streaming)
+ * - Are single-turn (maxTurns=1)
+ */
+export interface SimpleQueryOptions {
+  /** The prompt - either a string or array of content blocks */
+  prompt: string | PromptContentBlock[];
+
+  /** Model to use (defaults to haiku) */
+  model?: string;
+
+  /** Optional system prompt */
+  systemPrompt?: string;
+
+  /** Abort controller for cancellation */
+  abortController?: AbortController;
+}
+
+/**
+ * Result from a simple query
+ */
+export interface SimpleQueryResult {
+  /** Extracted text from the response */
+  text: string;
+
+  /** Whether the query completed successfully */
+  success: boolean;
+
+  /** Error message if failed */
+  error?: string;
+}
+
+/**
+ * Options for streaming queries with tools and/or structured output
+ */
+export interface StreamingQueryOptions extends SimpleQueryOptions {
+  /** Working directory for tool execution */
+  cwd: string;
+
+  /** Max turns (defaults to sdk-options presets) */
+  maxTurns?: number;
+
+  /** Tools to allow */
+  allowedTools?: readonly string[];
+
+  /** JSON schema for structured output */
+  outputFormat?: {
+    type: 'json_schema';
+    schema: Record<string, unknown>;
+  };
+
+  /** Callback for text chunks */
+  onText?: (text: string) => void;
+
+  /** Callback for tool usage */
+  onToolUse?: (name: string, input: unknown) => void;
+}
+
+/**
+ * Result from a streaming query with structured output
+ */
+export interface StreamingQueryResult extends SimpleQueryResult {
+  /** Parsed structured output if outputFormat was specified */
+  structuredOutput?: unknown;
+}

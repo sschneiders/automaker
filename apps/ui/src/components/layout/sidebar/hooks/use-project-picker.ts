@@ -29,8 +29,19 @@ export function useProjectPicker({
     return projects.filter((project) => project.name.toLowerCase().includes(query));
   }, [projects, projectSearchQuery]);
 
+  const getCurrentProjectIndex = useCallback(() => {
+    return currentProject ? filteredProjects.findIndex((p) => p.id === currentProject.id) : -1;
+  }, [currentProject, filteredProjects]);
+
   // Reset selection when filtered results change
   useEffect(() => {
+    if (!projectSearchQuery.trim()) {
+      const currentIndex = getCurrentProjectIndex();
+      if (currentIndex !== -1) {
+        setSelectedProjectIndex(currentIndex);
+        return;
+      }
+    }
     setSelectedProjectIndex(0);
   }, [filteredProjects.length, projectSearchQuery]);
 
@@ -39,13 +50,13 @@ export function useProjectPicker({
     if (!isProjectPickerOpen) {
       setProjectSearchQuery('');
       setSelectedProjectIndex(0);
-    } else if (currentProject) {
-      const currentIndex = filteredProjects.findIndex((p) => p.id === currentProject.id);
+    } else {
+      const currentIndex = getCurrentProjectIndex();
       if (currentIndex !== -1) {
         setSelectedProjectIndex(currentIndex);
       }
     }
-  }, [isProjectPickerOpen, currentProject, filteredProjects]);
+  }, [isProjectPickerOpen, currentProject]);
 
   // Focus the search input when dropdown opens
   useEffect(() => {

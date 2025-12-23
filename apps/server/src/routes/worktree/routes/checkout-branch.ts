@@ -1,11 +1,14 @@
 /**
  * POST /checkout-branch endpoint - Create and checkout a new branch
+ *
+ * Note: Git repository validation (isGitRepo, hasCommits) is handled by
+ * the requireValidWorktree middleware in index.ts
  */
 
 import type { Request, Response } from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getErrorMessage, logError, isGitRepo, hasCommits } from '../common.js';
+import { getErrorMessage, logError } from '../common.js';
 
 const execAsync = promisify(exec);
 
@@ -39,26 +42,6 @@ export function createCheckoutBranchHandler() {
         res.status(400).json({
           success: false,
           error: 'Branch name contains invalid characters',
-        });
-        return;
-      }
-
-      // Check if path is a git repository
-      if (!(await isGitRepo(worktreePath))) {
-        res.status(400).json({
-          success: false,
-          error: 'Not a git repository',
-          code: 'NOT_GIT_REPO',
-        });
-        return;
-      }
-
-      // Check if repository has at least one commit
-      if (!(await hasCommits(worktreePath))) {
-        res.status(400).json({
-          success: false,
-          error: 'Repository has no commits yet',
-          code: 'NO_COMMITS',
         });
         return;
       }

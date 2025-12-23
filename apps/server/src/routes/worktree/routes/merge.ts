@@ -1,12 +1,15 @@
 /**
  * POST /merge endpoint - Merge feature (merge worktree branch into main)
+ *
+ * Note: Git repository validation (isGitRepo, hasCommits) is handled by
+ * the requireValidProject middleware in index.ts
  */
 
 import type { Request, Response } from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
-import { getErrorMessage, logError, isGitRepo, hasCommits } from '../common.js';
+import { getErrorMessage, logError } from '../common.js';
 
 const execAsync = promisify(exec);
 
@@ -23,26 +26,6 @@ export function createMergeHandler() {
         res.status(400).json({
           success: false,
           error: 'projectPath and featureId required',
-        });
-        return;
-      }
-
-      // Check if path is a git repository
-      if (!(await isGitRepo(projectPath))) {
-        res.status(400).json({
-          success: false,
-          error: 'Not a git repository',
-          code: 'NOT_GIT_REPO',
-        });
-        return;
-      }
-
-      // Check if repository has at least one commit
-      if (!(await hasCommits(projectPath))) {
-        res.status(400).json({
-          success: false,
-          error: 'Repository has no commits yet',
-          code: 'NO_COMMITS',
         });
         return;
       }

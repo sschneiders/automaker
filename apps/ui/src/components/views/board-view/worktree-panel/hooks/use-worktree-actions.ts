@@ -5,12 +5,26 @@ import type { WorktreeInfo } from '../types';
 
 // Error codes that need special user-friendly handling
 const GIT_STATUS_ERROR_CODES = ['NOT_GIT_REPO', 'NO_COMMITS'] as const;
+type GitStatusErrorCode = (typeof GIT_STATUS_ERROR_CODES)[number];
 
 // User-friendly messages for git status errors
-const GIT_STATUS_ERROR_MESSAGES: Record<string, string> = {
+const GIT_STATUS_ERROR_MESSAGES: Record<GitStatusErrorCode, string> = {
   NOT_GIT_REPO: 'This directory is not a git repository',
   NO_COMMITS: 'Repository has no commits yet. Create an initial commit first.',
 };
+
+/**
+ * Helper to handle git status errors with user-friendly messages.
+ * @returns true if the error was a git status error and was handled, false otherwise.
+ */
+function handleGitStatusError(result: { code?: string; error?: string }): boolean {
+  const errorCode = result.code as GitStatusErrorCode | undefined;
+  if (errorCode && GIT_STATUS_ERROR_CODES.includes(errorCode)) {
+    toast.info(GIT_STATUS_ERROR_MESSAGES[errorCode] || result.error);
+    return true;
+  }
+  return false;
+}
 
 interface UseWorktreeActionsOptions {
   fetchWorktrees: () => Promise<Array<{ path: string; branch: string }> | undefined>;
@@ -38,15 +52,7 @@ export function useWorktreeActions({ fetchWorktrees, fetchBranches }: UseWorktre
           toast.success(result.result.message);
           fetchWorktrees();
         } else {
-          // Handle git status errors with informative messages
-          const errorCode = (result as { code?: string }).code;
-          if (
-            errorCode &&
-            GIT_STATUS_ERROR_CODES.includes(errorCode as (typeof GIT_STATUS_ERROR_CODES)[number])
-          ) {
-            toast.info(GIT_STATUS_ERROR_MESSAGES[errorCode] || result.error);
-            return;
-          }
+          if (handleGitStatusError(result)) return;
           toast.error(result.error || 'Failed to switch branch');
         }
       } catch (error) {
@@ -74,15 +80,7 @@ export function useWorktreeActions({ fetchWorktrees, fetchBranches }: UseWorktre
           toast.success(result.result.message);
           fetchWorktrees();
         } else {
-          // Handle git status errors with informative messages
-          const errorCode = (result as { code?: string }).code;
-          if (
-            errorCode &&
-            GIT_STATUS_ERROR_CODES.includes(errorCode as (typeof GIT_STATUS_ERROR_CODES)[number])
-          ) {
-            toast.info(GIT_STATUS_ERROR_MESSAGES[errorCode] || result.error);
-            return;
-          }
+          if (handleGitStatusError(result)) return;
           toast.error(result.error || 'Failed to pull latest changes');
         }
       } catch (error) {
@@ -111,15 +109,7 @@ export function useWorktreeActions({ fetchWorktrees, fetchBranches }: UseWorktre
           fetchBranches(worktree.path);
           fetchWorktrees();
         } else {
-          // Handle git status errors with informative messages
-          const errorCode = (result as { code?: string }).code;
-          if (
-            errorCode &&
-            GIT_STATUS_ERROR_CODES.includes(errorCode as (typeof GIT_STATUS_ERROR_CODES)[number])
-          ) {
-            toast.info(GIT_STATUS_ERROR_MESSAGES[errorCode] || result.error);
-            return;
-          }
+          if (handleGitStatusError(result)) return;
           toast.error(result.error || 'Failed to push changes');
         }
       } catch (error) {

@@ -7,7 +7,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Trash2,
   MoreHorizontal,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WorktreeInfo, DevServerInfo, PRInfo, GitRepoStatus } from '../types';
+import { TooltipWrapper } from './tooltip-wrapper';
 
 interface WorktreeActionsDropdownProps {
   worktree: WorktreeInfo;
@@ -146,92 +146,58 @@ export function WorktreeActionsDropdown({
             <DropdownMenuSeparator />
           </>
         )}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <DropdownMenuItem
-                  onClick={() => canPerformGitOps && onPull(worktree)}
-                  disabled={isPulling || !canPerformGitOps}
-                  className={cn('text-xs', !canPerformGitOps && 'opacity-50 cursor-not-allowed')}
-                >
-                  <Download className={cn('w-3.5 h-3.5 mr-2', isPulling && 'animate-pulse')} />
-                  {isPulling ? 'Pulling...' : 'Pull'}
-                  {!canPerformGitOps && (
-                    <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
-                  )}
-                  {canPerformGitOps && behindCount > 0 && (
-                    <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">
-                      {behindCount} behind
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              </div>
-            </TooltipTrigger>
-            {gitOpsDisabledReason && (
-              <TooltipContent side="left">
-                <p>{gitOpsDisabledReason}</p>
-              </TooltipContent>
+        <TooltipWrapper showTooltip={!!gitOpsDisabledReason} tooltipContent={gitOpsDisabledReason}>
+          <DropdownMenuItem
+            onClick={() => canPerformGitOps && onPull(worktree)}
+            disabled={isPulling || !canPerformGitOps}
+            className={cn('text-xs', !canPerformGitOps && 'opacity-50 cursor-not-allowed')}
+          >
+            <Download className={cn('w-3.5 h-3.5 mr-2', isPulling && 'animate-pulse')} />
+            {isPulling ? 'Pulling...' : 'Pull'}
+            {!canPerformGitOps && <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />}
+            {canPerformGitOps && behindCount > 0 && (
+              <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">
+                {behindCount} behind
+              </span>
             )}
-          </Tooltip>
-        </TooltipProvider>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <DropdownMenuItem
-                  onClick={() => canPerformGitOps && onPush(worktree)}
-                  disabled={isPushing || aheadCount === 0 || !canPerformGitOps}
-                  className={cn('text-xs', !canPerformGitOps && 'opacity-50 cursor-not-allowed')}
-                >
-                  <Upload className={cn('w-3.5 h-3.5 mr-2', isPushing && 'animate-pulse')} />
-                  {isPushing ? 'Pushing...' : 'Push'}
-                  {!canPerformGitOps && (
-                    <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
-                  )}
-                  {canPerformGitOps && aheadCount > 0 && (
-                    <span className="ml-auto text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded">
-                      {aheadCount} ahead
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              </div>
-            </TooltipTrigger>
-            {gitOpsDisabledReason && (
-              <TooltipContent side="left">
-                <p>{gitOpsDisabledReason}</p>
-              </TooltipContent>
+          </DropdownMenuItem>
+        </TooltipWrapper>
+        <TooltipWrapper showTooltip={!!gitOpsDisabledReason} tooltipContent={gitOpsDisabledReason}>
+          <DropdownMenuItem
+            onClick={() => canPerformGitOps && onPush(worktree)}
+            disabled={isPushing || aheadCount === 0 || !canPerformGitOps}
+            className={cn('text-xs', !canPerformGitOps && 'opacity-50 cursor-not-allowed')}
+          >
+            <Upload className={cn('w-3.5 h-3.5 mr-2', isPushing && 'animate-pulse')} />
+            {isPushing ? 'Pushing...' : 'Push'}
+            {!canPerformGitOps && <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />}
+            {canPerformGitOps && aheadCount > 0 && (
+              <span className="ml-auto text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                {aheadCount} ahead
+              </span>
             )}
-          </Tooltip>
-        </TooltipProvider>
+          </DropdownMenuItem>
+        </TooltipWrapper>
         {!worktree.isMain && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <DropdownMenuItem
-                    onClick={() => canPerformGitOps && onResolveConflicts(worktree)}
-                    disabled={!canPerformGitOps}
-                    className={cn(
-                      'text-xs text-purple-500 focus:text-purple-600',
-                      !canPerformGitOps && 'opacity-50 cursor-not-allowed'
-                    )}
-                  >
-                    <GitMerge className="w-3.5 h-3.5 mr-2" />
-                    Pull & Resolve Conflicts
-                    {!canPerformGitOps && (
-                      <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
-                    )}
-                  </DropdownMenuItem>
-                </div>
-              </TooltipTrigger>
-              {gitOpsDisabledReason && (
-                <TooltipContent side="left">
-                  <p>{gitOpsDisabledReason}</p>
-                </TooltipContent>
+          <TooltipWrapper
+            showTooltip={!!gitOpsDisabledReason}
+            tooltipContent={gitOpsDisabledReason}
+          >
+            <DropdownMenuItem
+              onClick={() => canPerformGitOps && onResolveConflicts(worktree)}
+              disabled={!canPerformGitOps}
+              className={cn(
+                'text-xs text-purple-500 focus:text-purple-600',
+                !canPerformGitOps && 'opacity-50 cursor-not-allowed'
               )}
-            </Tooltip>
-          </TooltipProvider>
+            >
+              <GitMerge className="w-3.5 h-3.5 mr-2" />
+              Pull & Resolve Conflicts
+              {!canPerformGitOps && (
+                <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
+          </TooltipWrapper>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onOpenInEditor(worktree)} className="text-xs">
@@ -240,60 +206,41 @@ export function WorktreeActionsDropdown({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {worktree.hasChanges && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <DropdownMenuItem
-                    onClick={() => gitRepoStatus.isGitRepo && onCommit(worktree)}
-                    disabled={!gitRepoStatus.isGitRepo}
-                    className={cn(
-                      'text-xs',
-                      !gitRepoStatus.isGitRepo && 'opacity-50 cursor-not-allowed'
-                    )}
-                  >
-                    <GitCommit className="w-3.5 h-3.5 mr-2" />
-                    Commit Changes
-                    {!gitRepoStatus.isGitRepo && (
-                      <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
-                    )}
-                  </DropdownMenuItem>
-                </div>
-              </TooltipTrigger>
+          <TooltipWrapper
+            showTooltip={!gitRepoStatus.isGitRepo}
+            tooltipContent="Not a git repository"
+          >
+            <DropdownMenuItem
+              onClick={() => gitRepoStatus.isGitRepo && onCommit(worktree)}
+              disabled={!gitRepoStatus.isGitRepo}
+              className={cn('text-xs', !gitRepoStatus.isGitRepo && 'opacity-50 cursor-not-allowed')}
+            >
+              <GitCommit className="w-3.5 h-3.5 mr-2" />
+              Commit Changes
               {!gitRepoStatus.isGitRepo && (
-                <TooltipContent side="left">
-                  <p>Not a git repository</p>
-                </TooltipContent>
+                <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
               )}
-            </Tooltip>
-          </TooltipProvider>
+            </DropdownMenuItem>
+          </TooltipWrapper>
         )}
         {/* Show PR option for non-primary worktrees, or primary worktree with changes */}
         {(!worktree.isMain || worktree.hasChanges) && !hasPR && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <DropdownMenuItem
-                    onClick={() => canPerformGitOps && onCreatePR(worktree)}
-                    disabled={!canPerformGitOps}
-                    className={cn('text-xs', !canPerformGitOps && 'opacity-50 cursor-not-allowed')}
-                  >
-                    <GitPullRequest className="w-3.5 h-3.5 mr-2" />
-                    Create Pull Request
-                    {!canPerformGitOps && (
-                      <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
-                    )}
-                  </DropdownMenuItem>
-                </div>
-              </TooltipTrigger>
-              {gitOpsDisabledReason && (
-                <TooltipContent side="left">
-                  <p>{gitOpsDisabledReason}</p>
-                </TooltipContent>
+          <TooltipWrapper
+            showTooltip={!!gitOpsDisabledReason}
+            tooltipContent={gitOpsDisabledReason}
+          >
+            <DropdownMenuItem
+              onClick={() => canPerformGitOps && onCreatePR(worktree)}
+              disabled={!canPerformGitOps}
+              className={cn('text-xs', !canPerformGitOps && 'opacity-50 cursor-not-allowed')}
+            >
+              <GitPullRequest className="w-3.5 h-3.5 mr-2" />
+              Create Pull Request
+              {!canPerformGitOps && (
+                <AlertCircle className="w-3 h-3 ml-auto text-muted-foreground" />
               )}
-            </Tooltip>
-          </TooltipProvider>
+            </DropdownMenuItem>
+          </TooltipWrapper>
         )}
         {/* Show PR info and Address Comments button if PR exists */}
         {!worktree.isMain && hasPR && worktree.pr && (

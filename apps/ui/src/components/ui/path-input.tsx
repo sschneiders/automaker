@@ -226,6 +226,7 @@ function PathInput({
       // Close search with Escape key
       if (e.key === 'Escape' && isSearchOpen) {
         e.preventDefault();
+        e.stopPropagation(); // Stop propagation so parent modal doesn't close
         setIsSearchOpen(false);
       }
     };

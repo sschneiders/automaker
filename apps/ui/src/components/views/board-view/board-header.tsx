@@ -99,7 +99,7 @@ export function BoardHeader({
           data-testid="plan-backlog-button"
         >
           <Wand2 className="w-4 h-4 mr-2" />
-          Auto Mode
+          Plan
         </Button>
 
         <HotkeyButton

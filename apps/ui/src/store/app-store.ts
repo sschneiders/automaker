@@ -766,9 +766,9 @@ export interface AppActions {
   setValidationModel: (model: ModelAlias) => void;
 
   // Phase Model actions
-  setPhaseModel: (phase: PhaseModelKey, model: ModelAlias | CursorModelId) => void;
-  setPhaseModels: (models: Partial<PhaseModelConfig>) => void;
-  resetPhaseModels: () => void;
+  setPhaseModel: (phase: PhaseModelKey, model: ModelAlias | CursorModelId) => Promise<void>;
+  setPhaseModels: (models: Partial<PhaseModelConfig>) => Promise<void>;
+  resetPhaseModels: () => Promise<void>;
 
   // Cursor CLI Settings actions
   setEnabledCursorModels: (models: CursorModelId[]) => void;
@@ -1590,21 +1590,34 @@ export const useAppStore = create<AppState & AppActions>()(
       setValidationModel: (model) => set({ validationModel: model }),
 
       // Phase Model actions
-      setPhaseModel: (phase, model) =>
+      setPhaseModel: async (phase, model) => {
         set((state) => ({
           phaseModels: {
             ...state.phaseModels,
             [phase]: model,
           },
-        })),
-      setPhaseModels: (models) =>
+        }));
+        // Sync to server settings file
+        const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+        await syncSettingsToServer();
+      },
+      setPhaseModels: async (models) => {
         set((state) => ({
           phaseModels: {
             ...state.phaseModels,
             ...models,
           },
-        })),
-      resetPhaseModels: () => set({ phaseModels: DEFAULT_PHASE_MODELS }),
+        }));
+        // Sync to server settings file
+        const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+        await syncSettingsToServer();
+      },
+      resetPhaseModels: async () => {
+        set({ phaseModels: DEFAULT_PHASE_MODELS });
+        // Sync to server settings file
+        const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+        await syncSettingsToServer();
+      },
 
       // Cursor CLI Settings actions
       setEnabledCursorModels: (models) => set({ enabledCursorModels: models }),

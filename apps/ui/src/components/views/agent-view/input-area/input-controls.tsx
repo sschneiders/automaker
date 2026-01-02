@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { AgentModelSelector } from '../shared/agent-model-selector';
-import type { ModelAlias } from '@/store/app-store';
-import type { CursorModelId } from '@automaker/types';
+import type { PhaseModelEntry } from '@automaker/types';
 
 interface InputControlsProps {
   input: string;
@@ -14,8 +13,10 @@ interface InputControlsProps {
   onStop: () => void;
   onToggleImageDropZone: () => void;
   onPaste: (e: React.ClipboardEvent) => Promise<void>;
-  selectedModel: ModelAlias | CursorModelId;
-  onModelSelect: (model: ModelAlias | CursorModelId) => void;
+  /** Current model selection (model + optional thinking level) */
+  modelSelection: PhaseModelEntry;
+  /** Callback when model is selected */
+  onModelSelect: (entry: PhaseModelEntry) => void;
   isProcessing: boolean;
   isConnected: boolean;
   hasFiles: boolean;
@@ -37,7 +38,7 @@ export function InputControls({
   onStop,
   onToggleImageDropZone,
   onPaste,
-  selectedModel,
+  modelSelection,
   onModelSelect,
   isProcessing,
   isConnected,
@@ -125,8 +126,8 @@ export function InputControls({
 
         {/* Model Selector */}
         <AgentModelSelector
-          selectedModel={selectedModel}
-          onModelSelect={onModelSelect}
+          value={modelSelection}
+          onChange={onModelSelect}
           disabled={!isConnected}
         />
 

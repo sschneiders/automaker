@@ -1422,7 +1422,8 @@ export class HttpApiClient implements ElectronAPI {
       message: string,
       workingDirectory?: string,
       imagePaths?: string[],
-      model?: string
+      model?: string,
+      thinkingLevel?: string
     ): Promise<{ success: boolean; error?: string }> =>
       this.post('/api/agent/send', {
         sessionId,
@@ -1430,6 +1431,7 @@ export class HttpApiClient implements ElectronAPI {
         workingDirectory,
         imagePaths,
         model,
+        thinkingLevel,
       }),
 
     getHistory: (

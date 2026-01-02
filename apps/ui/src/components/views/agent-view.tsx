@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useAppStore, type ModelAlias } from '@/store/app-store';
-import type { CursorModelId } from '@automaker/types';
+import { useAppStore } from '@/store/app-store';
+import type { PhaseModelEntry } from '@automaker/types';
 import { useElectronAgent } from '@/hooks/use-electron-agent';
 import { SessionManager } from '@/components/session-manager';
 
@@ -21,7 +21,7 @@ export function AgentView() {
   const [input, setInput] = useState('');
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [showSessionManager, setShowSessionManager] = useState(true);
-  const [selectedModel, setSelectedModel] = useState<ModelAlias | CursorModelId>('sonnet');
+  const [modelSelection, setModelSelection] = useState<PhaseModelEntry>({ model: 'sonnet' });
 
   // Input ref for auto-focus
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -50,7 +50,8 @@ export function AgentView() {
   } = useElectronAgent({
     sessionId: currentSessionId || '',
     workingDirectory: currentProject?.path,
-    model: selectedModel,
+    model: modelSelection.model,
+    thinkingLevel: modelSelection.thinkingLevel,
     onToolUse: (toolName) => {
       setCurrentTool(toolName);
       setTimeout(() => setCurrentTool(null), 2000);
@@ -185,8 +186,8 @@ export function AgentView() {
             onInputChange={setInput}
             onSend={handleSend}
             onStop={stopExecution}
-            selectedModel={selectedModel}
-            onModelSelect={setSelectedModel}
+            modelSelection={modelSelection}
+            onModelSelect={setModelSelection}
             isProcessing={isProcessing}
             isConnected={isConnected}
             selectedImages={fileAttachments.selectedImages}

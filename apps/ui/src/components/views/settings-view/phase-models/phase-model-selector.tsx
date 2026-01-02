@@ -36,10 +36,22 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface PhaseModelSelectorProps {
-  label: string;
-  description: string;
+  /** Label shown in full mode */
+  label?: string;
+  /** Description shown in full mode */
+  description?: string;
+  /** Current model selection */
   value: PhaseModelEntry;
+  /** Callback when model is selected */
   onChange: (entry: PhaseModelEntry) => void;
+  /** Compact mode - just shows the button trigger without label/description wrapper */
+  compact?: boolean;
+  /** Custom trigger class name */
+  triggerClassName?: string;
+  /** Popover alignment */
+  align?: 'start' | 'end';
+  /** Disabled state */
+  disabled?: boolean;
 }
 
 export function PhaseModelSelector({
@@ -47,6 +59,10 @@ export function PhaseModelSelector({
   description,
   value,
   onChange,
+  compact = false,
+  triggerClassName,
+  align = 'end',
+  disabled = false,
 }: PhaseModelSelectorProps) {
   const [open, setOpen] = React.useState(false);
   const [expandedGroup, setExpandedGroup] = React.useState<string | null>(null);
@@ -505,6 +521,119 @@ export function PhaseModelSelector({
     );
   };
 
+  // Compact trigger button (for agent view etc.)
+  const compactTrigger = (
+    <Button
+      variant="outline"
+      role="combobox"
+      aria-expanded={open}
+      disabled={disabled}
+      className={cn(
+        'h-11 gap-1 text-xs font-medium rounded-xl border-border px-2.5',
+        triggerClassName
+      )}
+      data-testid="model-selector"
+    >
+      {currentModel?.icon && <currentModel.icon className="h-4 w-4 text-muted-foreground/70" />}
+      <span className="truncate text-sm">
+        {currentModel?.label?.replace('Claude ', '') || 'Select model...'}
+      </span>
+      <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+    </Button>
+  );
+
+  // Full trigger button (for settings view)
+  const fullTrigger = (
+    <Button
+      variant="outline"
+      role="combobox"
+      aria-expanded={open}
+      disabled={disabled}
+      className={cn(
+        'w-[260px] justify-between h-9 px-3 bg-background/50 border-border/50 hover:bg-background/80 hover:text-foreground',
+        triggerClassName
+      )}
+    >
+      <div className="flex items-center gap-2 truncate">
+        {currentModel?.icon && <currentModel.icon className="h-4 w-4 text-muted-foreground/70" />}
+        <span className="truncate text-sm">{currentModel?.label || 'Select model...'}</span>
+      </div>
+      <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+    </Button>
+  );
+
+  // The popover content (shared between both modes)
+  const popoverContent = (
+    <PopoverContent className="w-[320px] p-0" align={align}>
+      <Command>
+        <CommandInput placeholder="Search models..." />
+        <CommandList ref={commandListRef} className="max-h-[300px]">
+          <CommandEmpty>No model found.</CommandEmpty>
+
+          {favorites.length > 0 && (
+            <>
+              <CommandGroup heading="Favorites">
+                {(() => {
+                  const renderedGroups = new Set<string>();
+                  return favorites.map((model) => {
+                    // Check if this favorite is part of a grouped model
+                    if (model.provider === 'cursor') {
+                      const cursorId = stripProviderPrefix(model.id) as CursorModelId;
+                      const group = getModelGroup(cursorId);
+                      if (group) {
+                        // Skip if we already rendered this group
+                        if (renderedGroups.has(group.baseId)) {
+                          return null;
+                        }
+                        renderedGroups.add(group.baseId);
+                        // Find the group in groupedModels (which has filtered variants)
+                        const filteredGroup = groupedModels.find((g) => g.baseId === group.baseId);
+                        if (filteredGroup) {
+                          return renderGroupedModelItem(filteredGroup);
+                        }
+                      }
+                      // Standalone Cursor model
+                      return renderCursorModelItem(model);
+                    }
+                    // Claude model
+                    return renderClaudeModelItem(model);
+                  });
+                })()}
+              </CommandGroup>
+              <CommandSeparator />
+            </>
+          )}
+
+          {claude.length > 0 && (
+            <CommandGroup heading="Claude Models">
+              {claude.map((model) => renderClaudeModelItem(model))}
+            </CommandGroup>
+          )}
+
+          {(groupedModels.length > 0 || standaloneCursorModels.length > 0) && (
+            <CommandGroup heading="Cursor Models">
+              {/* Grouped models with secondary popover */}
+              {groupedModels.map((group) => renderGroupedModelItem(group))}
+              {/* Standalone models */}
+              {standaloneCursorModels.map((model) => renderCursorModelItem(model))}
+            </CommandGroup>
+          )}
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  );
+
+  // Compact mode - just the popover with compact trigger
+  if (compact) {
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>{compactTrigger}</PopoverTrigger>
+        {popoverContent}
+      </Popover>
+    );
+  }
+
+  // Full mode - with label and description wrapper
   return (
     <div
       className={cn(
@@ -521,81 +650,8 @@ export function PhaseModelSelector({
 
       {/* Model Selection Popover */}
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className="w-[260px] justify-between h-9 px-3 bg-background/50 border-border/50 hover:bg-background/80 hover:text-foreground"
-          >
-            <div className="flex items-center gap-2 truncate">
-              {currentModel?.icon && (
-                <currentModel.icon className="h-4 w-4 text-muted-foreground/70" />
-              )}
-              <span className="truncate text-sm">{currentModel?.label || 'Select model...'}</span>
-            </div>
-            <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[320px] p-0" align="end">
-          <Command>
-            <CommandInput placeholder="Search models..." />
-            <CommandList ref={commandListRef} className="max-h-[300px]">
-              <CommandEmpty>No model found.</CommandEmpty>
-
-              {favorites.length > 0 && (
-                <>
-                  <CommandGroup heading="Favorites">
-                    {(() => {
-                      const renderedGroups = new Set<string>();
-                      return favorites.map((model) => {
-                        // Check if this favorite is part of a grouped model
-                        if (model.provider === 'cursor') {
-                          const cursorId = stripProviderPrefix(model.id) as CursorModelId;
-                          const group = getModelGroup(cursorId);
-                          if (group) {
-                            // Skip if we already rendered this group
-                            if (renderedGroups.has(group.baseId)) {
-                              return null;
-                            }
-                            renderedGroups.add(group.baseId);
-                            // Find the group in groupedModels (which has filtered variants)
-                            const filteredGroup = groupedModels.find(
-                              (g) => g.baseId === group.baseId
-                            );
-                            if (filteredGroup) {
-                              return renderGroupedModelItem(filteredGroup);
-                            }
-                          }
-                          // Standalone Cursor model
-                          return renderCursorModelItem(model);
-                        }
-                        // Claude model
-                        return renderClaudeModelItem(model);
-                      });
-                    })()}
-                  </CommandGroup>
-                  <CommandSeparator />
-                </>
-              )}
-
-              {claude.length > 0 && (
-                <CommandGroup heading="Claude Models">
-                  {claude.map((model) => renderClaudeModelItem(model))}
-                </CommandGroup>
-              )}
-
-              {(groupedModels.length > 0 || standaloneCursorModels.length > 0) && (
-                <CommandGroup heading="Cursor Models">
-                  {/* Grouped models with secondary popover */}
-                  {groupedModels.map((group) => renderGroupedModelItem(group))}
-                  {/* Standalone models */}
-                  {standaloneCursorModels.map((model) => renderCursorModelItem(model))}
-                </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
+        <PopoverTrigger asChild>{fullTrigger}</PopoverTrigger>
+        {popoverContent}
       </Popover>
     </div>
   );

@@ -1,6 +1,6 @@
 import { ImageDropZone } from '@/components/ui/image-drop-zone';
-import type { ImageAttachment, TextFileAttachment, ModelAlias } from '@/store/app-store';
-import type { CursorModelId } from '@automaker/types';
+import type { ImageAttachment, TextFileAttachment } from '@/store/app-store';
+import type { PhaseModelEntry } from '@automaker/types';
 import { FilePreview } from './file-preview';
 import { QueueDisplay } from './queue-display';
 import { InputControls } from './input-controls';
@@ -16,8 +16,10 @@ interface AgentInputAreaProps {
   onInputChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
-  selectedModel: ModelAlias | CursorModelId;
-  onModelSelect: (model: ModelAlias | CursorModelId) => void;
+  /** Current model selection (model + optional thinking level) */
+  modelSelection: PhaseModelEntry;
+  /** Callback when model is selected */
+  onModelSelect: (entry: PhaseModelEntry) => void;
   isProcessing: boolean;
   isConnected: boolean;
   // File attachments
@@ -48,7 +50,7 @@ export function AgentInputArea({
   onInputChange,
   onSend,
   onStop,
-  selectedModel,
+  modelSelection,
   onModelSelect,
   isProcessing,
   isConnected,
@@ -113,7 +115,7 @@ export function AgentInputArea({
         onStop={onStop}
         onToggleImageDropZone={onToggleImageDropZone}
         onPaste={onPaste}
-        selectedModel={selectedModel}
+        modelSelection={modelSelection}
         onModelSelect={onModelSelect}
         isProcessing={isProcessing}
         isConnected={isConnected}

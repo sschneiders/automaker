@@ -32,7 +32,8 @@ const SPEC_CONTENT = `<app_spec>
 </app_spec>
 `;
 
-// Clean settings.json for E2E tests - no current project so localStorage can control state
+// Clean settings.json for E2E tests
+// localStorageMigrated: false allows tests to override settings via localStorage (addInitScript)
 const E2E_SETTINGS = {
   version: 4,
   setupComplete: true,
@@ -136,17 +137,10 @@ const E2E_SETTINGS = {
       icon: 'Sparkles',
     },
   ],
-  // Default test project using the fixture path - tests can override via route mocking if needed
-  projects: [
-    {
-      id: 'e2e-default-project',
-      name: 'E2E Test Project',
-      path: FIXTURE_PATH,
-      lastOpened: new Date().toISOString(),
-    },
-  ],
+  // Empty projects array - tests control project state via localStorage (addInitScript)
+  projects: [],
   trashedProjects: [],
-  currentProjectId: 'e2e-default-project',
+  currentProjectId: null,
   projectHistory: [],
   projectHistoryIndex: 0,
   lastProjectDir: TEST_WORKSPACE_DIR,
@@ -166,7 +160,7 @@ const E2E_SETTINGS = {
   mcpAutoApproveTools: true,
   mcpUnrestrictedTools: true,
   promptCustomization: {},
-  localStorageMigrated: true,
+  localStorageMigrated: false,
 };
 
 function setupFixtures() {

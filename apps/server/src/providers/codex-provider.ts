@@ -31,6 +31,7 @@ import type {
 import {
   CODEX_MODEL_MAP,
   supportsReasoningEffort,
+  validateBareModelId,
   type CodexApprovalPolicy,
   type CodexSandboxMode,
   type CodexAuthStatus,
@@ -663,6 +664,10 @@ export class CodexProvider extends BaseProvider {
   }
 
   async *executeQuery(options: ExecuteOptions): AsyncGenerator<ProviderMessage> {
+    // Validate that model doesn't have a provider prefix
+    // AgentService should strip prefixes before passing to providers
+    validateBareModelId(options.model, 'CodexProvider');
+
     try {
       const mcpServers = options.mcpServers ?? {};
       const hasMcpServers = Object.keys(mcpServers).length > 0;
@@ -760,6 +765,7 @@ export class CodexProvider extends BaseProvider {
         }
       }
 
+      // Model is already bare (no prefix) - validated by executeQuery
       const args = [
         CODEX_EXEC_SUBCOMMAND,
         CODEX_YOLO_FLAG,

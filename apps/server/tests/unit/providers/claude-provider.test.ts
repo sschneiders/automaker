@@ -37,6 +37,7 @@ describe('claude-provider.ts', () => {
 
       const generator = provider.executeQuery({
         prompt: 'Hello',
+        model: 'claude-opus-4-5-20251101',
         cwd: '/test',
       });
 
@@ -88,6 +89,7 @@ describe('claude-provider.ts', () => {
 
       const generator = provider.executeQuery({
         prompt: 'Test',
+        model: 'claude-opus-4-5-20251101',
         cwd: '/test',
       });
 
@@ -112,6 +114,7 @@ describe('claude-provider.ts', () => {
 
       const generator = provider.executeQuery({
         prompt: 'Test',
+        model: 'claude-opus-4-5-20251101',
         cwd: '/test',
         abortController,
       });
@@ -140,6 +143,7 @@ describe('claude-provider.ts', () => {
 
       const generator = provider.executeQuery({
         prompt: 'Current message',
+        model: 'claude-opus-4-5-20251101',
         cwd: '/test',
         conversationHistory,
         sdkSessionId: 'test-session-id',
@@ -170,6 +174,7 @@ describe('claude-provider.ts', () => {
 
       const generator = provider.executeQuery({
         prompt: arrayPrompt as any,
+        model: 'claude-opus-4-5-20251101',
         cwd: '/test',
       });
 
@@ -189,6 +194,7 @@ describe('claude-provider.ts', () => {
 
       const generator = provider.executeQuery({
         prompt: 'Test',
+        model: 'claude-opus-4-5-20251101',
         cwd: '/test',
       });
 
@@ -214,6 +220,7 @@ describe('claude-provider.ts', () => {
 
       const generator = provider.executeQuery({
         prompt: 'Test',
+        model: 'claude-opus-4-5-20251101',
         cwd: '/test',
       });
 

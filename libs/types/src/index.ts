@@ -185,6 +185,7 @@ export {
   addProviderPrefix,
   getBareModelId,
   normalizeModelString,
+  validateBareModelId,
 } from './provider-utils.js';
 
 // Pipeline types

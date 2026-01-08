@@ -40,6 +40,7 @@ import type { SettingsService } from './settings-service.js';
 import type { FeatureLoader } from './feature-loader.js';
 import { createChatOptions, validateWorkingDirectory } from '../lib/sdk-options.js';
 import { resolveModelString } from '@automaker/model-resolver';
+import { stripProviderPrefix } from '@automaker/types';
 
 const logger = createLogger('IdeationService');
 
@@ -201,7 +202,7 @@ export class IdeationService {
         existingWorkContext
       );
 
-      // Resolve model alias to canonical identifier
+      // Resolve model alias to canonical identifier (with prefix)
       const modelId = resolveModelString(options?.model ?? 'sonnet');
 
       // Create SDK options
@@ -214,9 +215,13 @@ export class IdeationService {
 
       const provider = ProviderFactory.getProviderForModel(modelId);
 
+      // Strip provider prefix - providers need bare model IDs
+      const bareModel = stripProviderPrefix(modelId);
+
       const executeOptions: ExecuteOptions = {
         prompt: message,
-        model: modelId,
+        model: bareModel,
+        originalModel: modelId,
         cwd: projectPath,
         systemPrompt: sdkOptions.systemPrompt,
         maxTurns: 1, // Single turn for ideation
@@ -648,7 +653,7 @@ export class IdeationService {
         existingWorkContext
       );
 
-      // Resolve model alias to canonical identifier
+      // Resolve model alias to canonical identifier (with prefix)
       const modelId = resolveModelString('sonnet');
 
       // Create SDK options
@@ -661,9 +666,13 @@ export class IdeationService {
 
       const provider = ProviderFactory.getProviderForModel(modelId);
 
+      // Strip provider prefix - providers need bare model IDs
+      const bareModel = stripProviderPrefix(modelId);
+
       const executeOptions: ExecuteOptions = {
         prompt: prompt.prompt,
-        model: modelId,
+        model: bareModel,
+        originalModel: modelId,
         cwd: projectPath,
         systemPrompt: sdkOptions.systemPrompt,
         maxTurns: 1,

@@ -10,7 +10,7 @@ import { BaseProvider } from './base-provider.js';
 import { classifyError, getUserFriendlyErrorMessage, createLogger } from '@automaker/utils';
 
 const logger = createLogger('ClaudeProvider');
-import { getThinkingTokenBudget } from '@automaker/types';
+import { getThinkingTokenBudget, validateBareModelId } from '@automaker/types';
 import type {
   ExecuteOptions,
   ProviderMessage,
@@ -53,6 +53,10 @@ export class ClaudeProvider extends BaseProvider {
    * Execute a query using Claude Agent SDK
    */
   async *executeQuery(options: ExecuteOptions): AsyncGenerator<ProviderMessage> {
+    // Validate that model doesn't have a provider prefix
+    // AgentService should strip prefixes before passing to providers
+    validateBareModelId(options.model, 'ClaudeProvider');
+
     const {
       prompt,
       model,

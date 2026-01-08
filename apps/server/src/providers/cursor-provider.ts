@@ -28,7 +28,7 @@ import type {
   ModelDefinition,
   ContentBlock,
 } from './types.js';
-import { stripProviderPrefix } from '@automaker/types';
+import { validateBareModelId } from '@automaker/types';
 import { validateApiKey } from '../lib/auth-utils.js';
 import { getEffectivePermissions } from '../services/cursor-config-service.js';
 import {
@@ -317,8 +317,8 @@ export class CursorProvider extends CliProvider {
   }
 
   buildCliArgs(options: ExecuteOptions): string[] {
-    // Extract model (strip 'cursor-' prefix if present)
-    const model = stripProviderPrefix(options.model || 'auto');
+    // Model is already bare (no prefix) - validated by executeQuery
+    const model = options.model || 'auto';
 
     // Build CLI arguments for cursor-agent
     // NOTE: Prompt is NOT included here - it's passed via stdin to avoid
@@ -648,6 +648,10 @@ export class CursorProvider extends CliProvider {
    */
   async *executeQuery(options: ExecuteOptions): AsyncGenerator<ProviderMessage> {
     this.ensureCliDetected();
+
+    // Validate that model doesn't have a provider prefix
+    // AgentService should strip prefixes before passing to providers
+    validateBareModelId(options.model, 'CursorProvider');
 
     if (!this.cliPath) {
       throw this.createError(

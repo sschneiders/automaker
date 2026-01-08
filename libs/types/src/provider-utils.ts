@@ -196,3 +196,37 @@ export function normalizeModelString(model: string | undefined | null): string {
 
   return model;
 }
+
+/**
+ * Validate that a model ID does not contain a provider prefix
+ *
+ * Providers should receive bare model IDs (e.g., "gpt-5.1-codex-max", "composer-1")
+ * without provider prefixes (e.g., NOT "codex-gpt-5.1-codex-max", NOT "cursor-composer-1").
+ *
+ * This validation ensures the ProviderFactory properly stripped prefixes before
+ * passing models to providers.
+ *
+ * @param model - Model ID to validate
+ * @param providerName - Name of the provider for error messages
+ * @throws Error if model contains a provider prefix
+ *
+ * @example
+ * validateBareModelId("gpt-5.1-codex-max", "CodexProvider");  // ✅ OK
+ * validateBareModelId("codex-gpt-5.1-codex-max", "CodexProvider");  // ❌ Throws error
+ */
+export function validateBareModelId(model: string, providerName: string): void {
+  if (!model || typeof model !== 'string') {
+    throw new Error(`[${providerName}] Invalid model ID: expected string, got ${typeof model}`);
+  }
+
+  for (const [provider, prefix] of Object.entries(PROVIDER_PREFIXES)) {
+    if (model.startsWith(prefix)) {
+      throw new Error(
+        `[${providerName}] Model ID should not contain provider prefix '${prefix}'. ` +
+          `Got: '${model}'. ` +
+          `This is likely a bug in ProviderFactory - it should strip the '${provider}' prefix ` +
+          `before passing the model to the provider.`
+      );
+    }
+  }
+}

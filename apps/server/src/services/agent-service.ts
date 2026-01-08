@@ -7,6 +7,7 @@ import path from 'path';
 import * as secureFs from '../lib/secure-fs.js';
 import type { EventEmitter } from '../lib/events.js';
 import type { ExecuteOptions, ThinkingLevel, ReasoningEffort } from '@automaker/types';
+import { stripProviderPrefix } from '@automaker/types';
 import {
   readImageAsBase64,
   buildPromptWithImages,
@@ -290,13 +291,17 @@ export class AgentService {
       const maxTurns = sdkOptions.maxTurns;
       const allowedTools = sdkOptions.allowedTools as string[] | undefined;
 
-      // Get provider for this model
+      // Get provider for this model (with prefix)
       const provider = ProviderFactory.getProviderForModel(effectiveModel);
+
+      // Strip provider prefix - providers should receive bare model IDs
+      const bareModel = stripProviderPrefix(effectiveModel);
 
       // Build options for provider
       const options: ExecuteOptions = {
         prompt: '', // Will be set below based on images
-        model: effectiveModel,
+        model: bareModel, // Bare model ID (e.g., "gpt-5.1-codex-max", "composer-1")
+        originalModel: effectiveModel, // Original with prefix for logging (e.g., "codex-gpt-5.1-codex-max")
         cwd: effectiveWorkDir,
         systemPrompt: sdkOptions.systemPrompt,
         maxTurns: maxTurns,

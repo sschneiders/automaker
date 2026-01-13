@@ -10,6 +10,7 @@
  */
 
 import { ProviderFactory } from '../providers/provider-factory.js';
+import { simpleQuery } from '../providers/simple-query-service.js';
 import type {
   ExecuteOptions,
   Feature,
@@ -3193,40 +3194,23 @@ IMPORTANT: Only include NON-OBVIOUS learnings with real reasoning. Skip trivial 
 If nothing notable: {"learnings": []}`;
 
     try {
-      // Import query dynamically to avoid circular dependencies
-      const { query } = await import('@anthropic-ai/claude-agent-sdk');
-
       // Get model from phase settings
       const settings = await this.settingsService?.getGlobalSettings();
       const phaseModelEntry =
         settings?.phaseModels?.memoryExtractionModel || DEFAULT_PHASE_MODELS.memoryExtractionModel;
       const { model } = resolvePhaseModel(phaseModelEntry);
 
-      const stream = query({
+      const result = await simpleQuery({
         prompt: userPrompt,
-        options: {
-          model,
-          maxTurns: 1,
-          allowedTools: [],
-          permissionMode: 'acceptEdits',
-          systemPrompt:
-            'You are a JSON extraction assistant. You MUST respond with ONLY valid JSON, no explanations, no markdown, no other text. Extract learnings from the provided implementation context and return them as JSON.',
-        },
+        model,
+        cwd: projectPath,
+        maxTurns: 1,
+        allowedTools: [],
+        systemPrompt:
+          'You are a JSON extraction assistant. You MUST respond with ONLY valid JSON, no explanations, no markdown, no other text. Extract learnings from the provided implementation context and return them as JSON.',
       });
 
-      // Extract text from stream
-      let responseText = '';
-      for await (const msg of stream) {
-        if (msg.type === 'assistant' && msg.message?.content) {
-          for (const block of msg.message.content) {
-            if (block.type === 'text' && block.text) {
-              responseText += block.text;
-            }
-          }
-        } else if (msg.type === 'result' && msg.subtype === 'success') {
-          responseText = msg.result || responseText;
-        }
-      }
+      const responseText = result.text;
 
       console.log(`[AutoMode] Learning extraction response: ${responseText.length} chars`);
       console.log(`[AutoMode] Response preview: ${responseText.substring(0, 300)}`);

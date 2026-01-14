@@ -1652,14 +1652,14 @@ export class HttpApiClient implements ElectronAPI {
       featureId: string,
       prompt: string,
       imagePaths?: string[],
-      worktreePath?: string
+      useWorktrees?: boolean
     ) =>
       this.post('/api/auto-mode/follow-up-feature', {
         projectPath,
         featureId,
         prompt,
         imagePaths,
-        worktreePath,
+        useWorktrees,
       }),
     commitFeature: (projectPath: string, featureId: string, worktreePath?: string) =>
       this.post('/api/auto-mode/commit-feature', {

@@ -524,7 +524,7 @@ export interface AutoModeAPI {
     featureId: string,
     prompt: string,
     imagePaths?: string[],
-    worktreePath?: string
+    useWorktrees?: boolean
   ) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
   commitFeature: (
     projectPath: string,
@@ -2113,7 +2113,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       featureId: string,
       prompt: string,
       imagePaths?: string[],
-      worktreePath?: string
+      useWorktrees?: boolean
     ) => {
       if (mockRunningFeatures.has(featureId)) {
         return {

@@ -201,19 +201,33 @@ Your entire response should be valid JSON starting with { and ending with }. No 
       xmlContent = responseText.substring(xmlStart, xmlEnd + '</project_specification>'.length);
       logger.info(`Extracted XML content: ${xmlContent.length} chars (from position ${xmlStart})`);
     } else {
-      // No valid XML structure found in the response text
-      // This happens when structured output was expected but not received, and the agent
-      // output conversational text instead of XML (e.g., "The project directory appears to be empty...")
-      // We should NOT save this conversational text as it's not a valid spec
-      logger.error('❌ Response does not contain valid <project_specification> XML structure');
-      logger.error(
-        'This typically happens when structured output failed and the agent produced conversational text instead of XML'
-      );
-      throw new Error(
-        'Failed to generate spec: No valid XML structure found in response. ' +
-          'The response contained conversational text but no <project_specification> tags. ' +
-          'Please try again.'
-      );
+      // No XML found, try JSON extraction
+      logger.warn('⚠️ No XML tags found, attempting JSON extraction...');
+      const extractedJson = extractJson<SpecOutput>(responseText, { logger });
+
+      if (
+        extractedJson &&
+        typeof extractedJson.project_name === 'string' &&
+        typeof extractedJson.overview === 'string' &&
+        Array.isArray(extractedJson.technology_stack) &&
+        Array.isArray(extractedJson.core_capabilities) &&
+        Array.isArray(extractedJson.implemented_features)
+      ) {
+        logger.info('✅ Successfully extracted JSON from response text');
+        xmlContent = specToXml(extractedJson);
+        logger.info(`✅ Converted extracted JSON to XML: ${xmlContent.length} chars`);
+      } else {
+        // Neither XML nor valid JSON found
+        logger.error('❌ Response does not contain valid XML or JSON structure');
+        logger.error(
+          'This typically happens when structured output failed and the agent produced conversational text instead of structured output'
+        );
+        throw new Error(
+          'Failed to generate spec: No valid XML or JSON structure found in response. ' +
+            'The response contained conversational text but no <project_specification> tags or valid JSON. ' +
+            'Please try again.'
+        );
+      }
     }
   }
 

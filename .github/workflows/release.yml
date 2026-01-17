@@ -109,8 +109,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/macos-builds/*
-            artifacts/windows-builds/*
-            artifacts/linux-builds/*
+            artifacts/macos-builds/*.{dmg,zip,blockmap}
+            artifacts/windows-builds/*.{exe,blockmap}
+            artifacts/linux-builds/*.{AppImage,deb,rpm,blockmap}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

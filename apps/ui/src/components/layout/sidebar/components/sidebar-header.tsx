@@ -27,7 +27,7 @@ export function SidebarHeader({
   // Get the icon component from lucide-react
   const getIconComponent = (): LucideIcon => {
     if (currentProject?.icon && currentProject.icon in LucideIcons) {
-      return (LucideIcons as Record<string, LucideIcon>)[currentProject.icon];
+      return (LucideIcons as unknown as Record<string, LucideIcon>)[currentProject.icon];
     }
     return Folder;
   };
@@ -125,7 +125,7 @@ export function SidebarHeader({
               {projects.map((project) => {
                 const ProjectIcon =
                   project.icon && project.icon in LucideIcons
-                    ? (LucideIcons as Record<string, LucideIcon>)[project.icon]
+                    ? (LucideIcons as unknown as Record<string, LucideIcon>)[project.icon]
                     : Folder;
                 const isActive = currentProject?.id === project.id;
 

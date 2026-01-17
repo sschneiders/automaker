@@ -20,8 +20,8 @@ interface SettingsProject {
   name: string;
   path: string;
   theme?: string;
-  icon?: string | null;
-  customIconPath?: string | null;
+  icon?: string;
+  customIconPath?: string;
 }
 
 export function ProjectSettingsView() {

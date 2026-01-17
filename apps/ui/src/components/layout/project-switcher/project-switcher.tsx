@@ -17,6 +17,7 @@ import { getElectronAPI } from '@/lib/electron';
 import { initializeProject, hasAppSpec, hasAutomakerDir } from '@/lib/project-init';
 import { toast } from 'sonner';
 import { CreateSpecDialog } from '@/components/views/spec-view/dialogs';
+import type { FeatureCount } from '@/components/views/spec-view/types';
 
 function getOSAbbreviation(os: string): string {
   switch (os) {
@@ -57,7 +58,7 @@ export function ProjectSwitcher() {
   const [projectOverview, setProjectOverview] = useState('');
   const [generateFeatures, setGenerateFeatures] = useState(true);
   const [analyzeProject, setAnalyzeProject] = useState(true);
-  const [featureCount, setFeatureCount] = useState(5);
+  const [featureCount, setFeatureCount] = useState<FeatureCount>(50);
 
   // Derive isCreatingSpec from store state
   const isCreatingSpec = specCreatingForProject !== null;
@@ -208,13 +209,18 @@ export function ProjectSwitcher() {
 
     try {
       const api = getElectronAPI();
-      await api.generateAppSpec({
-        projectPath: setupProjectPath,
+      if (!api.specRegeneration) {
+        toast.error('Spec regeneration not available');
+        setSpecCreatingForProject(null);
+        return;
+      }
+      await api.specRegeneration.create(
+        setupProjectPath,
         projectOverview,
         generateFeatures,
         analyzeProject,
-        featureCount,
-      });
+        featureCount
+      );
     } catch (error) {
       console.error('Failed to generate spec:', error);
       toast.error('Failed to generate spec', {

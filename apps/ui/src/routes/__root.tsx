@@ -8,7 +8,7 @@ import {
   useFileBrowser,
   setGlobalFileBrowser,
 } from '@/contexts/file-browser-context';
-import { useAppStore, getStoredTheme } from '@/store/app-store';
+import { useAppStore, getStoredTheme, type ThemeMode } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { useAuthStore } from '@/store/auth-store';
 import { getElectronAPI, isElectron } from '@/lib/electron';
@@ -681,7 +681,7 @@ function RootLayoutContent() {
           upsertAndSetCurrentProject(
             autoOpenCandidate.path,
             autoOpenCandidate.name,
-            autoOpenCandidate.theme
+            autoOpenCandidate.theme as ThemeMode | undefined
           );
         }
 

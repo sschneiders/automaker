@@ -343,95 +343,83 @@ export async function openInFileManager(targetPath: string): Promise<{ editorNam
 }
 
 /**
- * Get the platform-specific terminal information
- */
-function getTerminalInfo(): { name: string; command: string; args: string[] } {
-  if (isMac) {
-    // On macOS, use Terminal.app with AppleScript to open in a specific directory
-    return {
-      name: 'Terminal',
-      command: 'open',
-      args: ['-a', 'Terminal'],
-    };
-  } else if (isWindows) {
-    // On Windows, use Windows Terminal if available, otherwise cmd
-    return {
-      name: 'Windows Terminal',
-      command: 'wt',
-      args: ['-d'],
-    };
-  } else {
-    // On Linux, try common terminal emulators in order of preference
-    return {
-      name: 'Terminal',
-      command: 'x-terminal-emulator',
-      args: ['--working-directory'],
-    };
-  }
-}
-
-/**
  * Open a terminal in the specified directory
  *
  * Handles cross-platform differences:
- * - On macOS, uses Terminal.app via 'open -a Terminal' or AppleScript for directory
+ * - On macOS, uses Terminal.app via AppleScript with safe path handling
  * - On Windows, uses Windows Terminal (wt) or falls back to cmd
- * - On Linux, uses x-terminal-emulator or common terminal emulators
+ * - On Linux, uses common terminal emulators with safe arguments
+ *
+ * Security: Uses safe argument passing to prevent command injection.
  *
  * @param targetPath - The directory path to open the terminal in
  * @returns Promise that resolves with terminal info when launched, rejects on error
  */
 export async function openInTerminal(targetPath: string): Promise<{ terminalName: string }> {
   if (isMac) {
-    // Use AppleScript to open Terminal.app in the specified directory
+    // Use AppleScript to safely open Terminal.app in the specified directory.
+    // Pass the path as an argument to osascript and use "quoted form of"
+    // to prevent command injection vulnerabilities.
     const script = `
-      tell application "Terminal"
-        do script "cd ${targetPath.replace(/"/g, '\\"').replace(/\$/g, '\\$')}"
-        activate
-      end tell
+      on run argv
+        tell application "Terminal"
+          if not running then
+            activate
+          end if
+          do script "cd " & quoted form of (item 1 of argv)
+          activate
+        end tell
+      end run
     `;
-    await execFileAsync('osascript', ['-e', script]);
-    return { terminalName: 'Terminal' };
+    try {
+      await execFileAsync('osascript', ['-e', script, targetPath]);
+      return { terminalName: 'Terminal' };
+    } catch {
+      // Fallback: 'open -a Terminal /path' is safer but opens a new window
+      await execFileAsync('open', ['-a', 'Terminal', targetPath]);
+      return { terminalName: 'Terminal' };
+    }
   } else if (isWindows) {
-    // Try Windows Terminal first
+    // Try Windows Terminal first, passing the directory as a safe argument
     try {
       return await new Promise((resolve, reject) => {
-        const child: ChildProcess = spawn('wt', ['-d', targetPath], {
-          shell: true,
+        const child: ChildProcess = spawn('wt.exe', ['-d', targetPath], {
+          shell: false, // Disable shell for security
           stdio: 'ignore',
           detached: true,
         });
         child.unref();
 
-        child.on('error', () => {
-          reject(new Error('Windows Terminal not available'));
+        child.on('error', (err) => {
+          // ENOENT means wt.exe is not in PATH
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+            reject(new Error('Windows Terminal not available'));
+          } else {
+            reject(err);
+          }
         });
 
-        setTimeout(() => resolve({ terminalName: 'Windows Terminal' }), 100);
+        // Assume success if it doesn't error out immediately
+        setTimeout(() => resolve({ terminalName: 'Windows Terminal' }), 200);
       });
     } catch {
-      // Fall back to cmd
+      // Fall back to cmd, using the cwd option for safety
       return await new Promise((resolve, reject) => {
-        const child: ChildProcess = spawn(
-          'cmd',
-          ['/c', 'start', 'cmd', '/k', `cd /d "${targetPath}"`],
-          {
-            shell: true,
-            stdio: 'ignore',
-            detached: true,
-          }
-        );
+        const child: ChildProcess = spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k'], {
+          cwd: targetPath,
+          shell: false,
+          stdio: 'ignore',
+          detached: true,
+        });
         child.unref();
 
-        child.on('error', (err) => {
-          reject(err);
-        });
+        child.on('error', reject);
 
-        setTimeout(() => resolve({ terminalName: 'Command Prompt' }), 100);
+        setTimeout(() => resolve({ terminalName: 'Command Prompt' }), 200);
       });
     }
   } else {
-    // Linux: Try common terminal emulators in order
+    // Linux: Try common terminal emulators in order, using safe arguments
     const terminals = [
       {
         name: 'GNOME Terminal',
@@ -444,7 +432,8 @@ export async function openInTerminal(targetPath: string): Promise<{ terminalName
         command: 'xfce4-terminal',
         args: ['--working-directory', targetPath],
       },
-      { name: 'xterm', command: 'xterm', args: ['-e', `cd "${targetPath}" && $SHELL`] },
+      // Use -cd for xterm to avoid shell command interpolation
+      { name: 'xterm', command: 'xterm', args: ['-cd', targetPath] },
       {
         name: 'x-terminal-emulator',
         command: 'x-terminal-emulator',
@@ -459,6 +448,6 @@ export async function openInTerminal(targetPath: string): Promise<{ terminalName
       }
     }
 
-    throw new Error('No terminal emulator found');
+    throw new Error('No supported terminal emulator found');
   }
 }

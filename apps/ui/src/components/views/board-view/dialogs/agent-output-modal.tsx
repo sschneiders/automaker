@@ -27,6 +27,8 @@ interface AgentOutputModalProps {
   onNumberKeyPress?: (key: string) => void;
   /** Project path - if not provided, falls back to window.__currentProject for backward compatibility */
   projectPath?: string;
+  /** Branch name for the feature worktree - used when viewing changes */
+  branchName?: string;
 }
 
 type ViewMode = 'summary' | 'parsed' | 'raw' | 'changes';
@@ -39,6 +41,7 @@ export function AgentOutputModal({
   featureStatus,
   onNumberKeyPress,
   projectPath: projectPathProp,
+  branchName,
 }: AgentOutputModalProps) {
   const isBacklogPlan = featureId.startsWith('backlog-plan:');
   const [output, setOutput] = useState<string>('');
@@ -432,7 +435,7 @@ export function AgentOutputModal({
             {projectPath ? (
               <GitDiffPanel
                 projectPath={projectPath}
-                featureId={featureId}
+                featureId={branchName || featureId}
                 compact={false}
                 useWorktrees={useWorktrees}
                 className="border-0 rounded-lg"

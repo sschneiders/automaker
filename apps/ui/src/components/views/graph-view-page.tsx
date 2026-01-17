@@ -418,6 +418,7 @@ export function GraphViewPage() {
         featureId={outputFeature?.id || ''}
         featureStatus={outputFeature?.status}
         onNumberKeyPress={handleOutputModalNumberKeyPress}
+        branchName={outputFeature?.branchName}
       />
 
       {/* Backlog Plan Dialog */}

@@ -1504,7 +1504,9 @@ Address the follow-up instructions above. Review the previous work and make the 
    */
   async verifyFeature(projectPath: string, featureId: string): Promise<boolean> {
     // Worktrees are in project dir
-    const worktreePath = path.join(projectPath, '.worktrees', featureId);
+    // Sanitize featureId the same way it's sanitized when creating worktrees
+    const sanitizedFeatureId = featureId.replace(/[^a-zA-Z0-9_-]/g, '-');
+    const worktreePath = path.join(projectPath, '.worktrees', sanitizedFeatureId);
     let workDir = projectPath;
 
     try {
@@ -1585,7 +1587,9 @@ Address the follow-up instructions above. Review the previous work and make the 
       }
     } else {
       // Fallback: try to find worktree at legacy location
-      const legacyWorktreePath = path.join(projectPath, '.worktrees', featureId);
+      // Sanitize featureId the same way it's sanitized when creating worktrees
+      const sanitizedFeatureId = featureId.replace(/[^a-zA-Z0-9_-]/g, '-');
+      const legacyWorktreePath = path.join(projectPath, '.worktrees', sanitizedFeatureId);
       try {
         await secureFs.access(legacyWorktreePath);
         workDir = legacyWorktreePath;
@@ -1790,22 +1794,25 @@ Format your response as a structured markdown document.`;
       provider?: ModelProvider;
       title?: string;
       description?: string;
+      branchName?: string;
     }>
   > {
     const agents = await Promise.all(
       Array.from(this.runningFeatures.values()).map(async (rf) => {
-        // Try to fetch feature data to get title and description
+        // Try to fetch feature data to get title, description, and branchName
         let title: string | undefined;
         let description: string | undefined;
+        let branchName: string | undefined;
 
         try {
           const feature = await this.featureLoader.get(rf.projectPath, rf.featureId);
           if (feature) {
             title = feature.title;
             description = feature.description;
+            branchName = feature.branchName;
           }
         } catch (error) {
-          // Silently ignore errors - title/description are optional
+          // Silently ignore errors - title/description/branchName are optional
         }
 
         return {
@@ -1817,6 +1824,7 @@ Format your response as a structured markdown document.`;
           provider: rf.provider,
           title,
           description,
+          branchName,
         };
       })
     );
